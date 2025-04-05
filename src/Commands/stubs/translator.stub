@@ -1,0 +1,21 @@
+<?php
+
+namespace {{ namespace }};
+
+use EduLazaro\Laratext\Contracts\TranslatorInterface;
+
+class {{ class }} implements TranslatorInterface
+{
+    public function translate(string $text, string $from, array $to): array
+    {
+        // TODO: Implement your translation logic here.
+
+        $results = [];
+
+        foreach ($to as $language) {
+            $results[$language] = $text; // Dummy return same text
+        }
+
+        return $results;
+    }
+}
