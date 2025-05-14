@@ -8,7 +8,7 @@
 
 ## Introduction
 
-Laratext is a Laravel package designed to manage and auto-translate your application's text strings. In laravel, when using the `__` gettext helper method you specify the translation or the key. Both options have issues. If you specify the key, the file becomes difficult to read, as you don't know what's there. If you specify the text, your translations will break if you change a single character. With Laratex you specify both the key and the text, makint it useful and readable.
+Laratext is a Laravel package designed to manage and auto-translate your application's text strings. In laravel, when using the `__` gettext helper method you specify the translation or the key. Both options have issues. If you specify the key, the file becomes difficult to read, as you don't know what's there. If you specify the text, your translations will break if you change a single character. With Laratext you specify both the key and the text, making it useful and readable.
 
 It also allows you to seamlessly integrate translation services (like OpenAI or Google Translate) into your Laravel application to automatically translate missing translation keys across multiple languages.
 
@@ -31,7 +31,7 @@ composer require edulazaro/laratext
 To publish the configuration run:
 
 ```bash
-php artisan vendor:publish" --tag="texts"
+php artisan vendor:publish --tag="texts"
 ```
 
 Or if for some reason it does not work:
@@ -137,7 +137,7 @@ To create a translator run:
 php artisan make:translator BeautifulTranslator
 ```
 
-This will create the BeautifulTranslator.php file in the `app/Translators` directory: 
+This will create the `BeautifulTranslator.php` file in the `app/Translators` directory: 
 
 ```php
 namespace App\Translators;
