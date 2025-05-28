@@ -30,8 +30,10 @@ class ScanTranslationsCommandTest extends TestCase
                     [
                         'message' => [
                             'content' => json_encode([
-                                'en' => 'Welcome',
-                                'es' => 'Bienvenido',
+                                'pages.home.welcome' => [
+                                    'en' => 'Welcome',
+                                    'es' => 'Bienvenido',
+                                ]
                             ]),
                         ],
                     ],
@@ -42,11 +44,9 @@ class ScanTranslationsCommandTest extends TestCase
         $this->artisan('laratext:scan --write --translator=openai')
             ->expectsOutput('Scanning project for translation keys...')
             ->expectsOutput('Found 1 unique keys.')
-            ->expectsOutput('Processing language: en')
             ->expectsOutput('Translation file updated: ' . lang_path('en.json'))
-            ->expectsOutput('Processing language: es')
             ->expectsOutput('Translation file updated: ' . lang_path('es.json'))
-            ->expectsOutput('All languages processed.')
+            ->expectsOutput('All translations processed.')
             ->assertExitCode(0);
 
         $this->assertFileExists(lang_path('en.json'));

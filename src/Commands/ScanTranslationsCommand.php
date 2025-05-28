@@ -49,15 +49,90 @@ class ScanTranslationsCommand extends Command
             ? [$this->option('lang')]
             : array_keys(config('texts.languages'));
 
-        foreach ($languages as $language) {
-            $this->processLanguage($language, $texts, $translator);
+        $defaultLanguage = config('app.locale');
+
+        // Load existing translations per language
+        $existingTranslations = [];
+        foreach ($languages as $lang) {
+            $path = lang_path("{$lang}.json");
+            $existingTranslations[$lang] = file_exists($path)
+                ? json_decode(file_get_contents($path), true)
+                : [];
         }
 
-        $this->info('All languages processed.');
+        // Determine missing keys per language
+        $missingTexts = [];
+        foreach ($texts as $key => $value) {
+            foreach ($languages as $lang) {
+                if (!array_key_exists($key, $existingTranslations[$lang])) {
+                    $missingTexts[$key] = $value;
+                    break;
+                }
+            }
+        }
+
+        if (empty($missingTexts)) {
+            $this->info("No new keys to translate.");
+            return;
+        }
+
+        $translations = [];
+
+        if ($translator && method_exists($translator, 'translateMany')) {
+            $translations = $translator->translateMany($missingTexts, $defaultLanguage, $languages);
+        } elseif ($translator) {
+            foreach ($missingTexts as $key => $value) {
+                $results = $translator->translate($value, $defaultLanguage, $languages);
+                $translations[$key] = $results;
+            }
+        } else {
+            foreach ($missingTexts as $key => $value) {
+                $translations[$key] = [];
+                foreach ($languages as $lang) {
+                    $translations[$key][$lang] = $value;
+                }
+            }
+        }
+
+        foreach ($languages as $lang) {
+            $path = lang_path("{$lang}.json");
+            $current = $existingTranslations[$lang] ?? [];
+
+            foreach ($translations as $key => $langs) {
+                if (!array_key_exists($key, $current)) {
+                    $current[$key] = $langs[$lang] ?? $key;
+                }
+            }
+
+            if ($this->option('diff')) {
+                $this->info("Diff for {$lang}:");
+                foreach ($translations as $key => $langs) {
+                    if (isset($langs[$lang])) {
+                        $this->line("+ \"$key\": \"{$langs[$lang]}\"");
+                    }
+                }
+            }
+
+            if ($this->option('write')) {
+                $directory = dirname($path);
+                is_dir($directory) || mkdir($directory, 0755, true);
+
+                file_put_contents(
+                    $path,
+                    json_encode($current, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+                );
+
+                $this->info("Translation file updated: {$path}");
+            } else {
+                $this->info("Run with --write to save changes for {$lang}.");
+            }
+        }
+
+        $this->info('All translations processed.');
     }
 
     /**
-     * Resolve the translator class based on option or config.
+     * Resolve the translator class from the command option or config.
      *
      * @param  string|null  $option
      * @return object|null
@@ -69,93 +144,16 @@ class ScanTranslationsCommand extends Command
         }
 
         $configMap = config('texts.translators', []);
-
         $translatorClass = $configMap[$option] ?? $option;
 
         return app($translatorClass);
     }
 
     /**
-     * Process a single language: find new keys and update the language file.
-     *
-     * @param  string  $language
-     * @param  array  $keys
-     * @param  object|null  $translator
-     * @return void
-     */
-    protected function processLanguage(string $language, array $texts, $translator = null): void
-    {
-        $this->info("Processing language: {$language}");
-
-        $path = lang_path("{$language}.json");
-        $existingTranslations = file_exists($path)
-            ? json_decode(file_get_contents($path), true)
-            : [];
-
-
-        $newKeys = array_diff(array_keys($texts), array_keys($existingTranslations));
-
-        $texts = array_intersect_key($texts, array_flip($newKeys));
-
-        if (empty($texts)) {
-            $this->info("No new keys to add for {$language}.");
-            return;
-        }
-
-        $updatedTranslations = $this->fillTranslations($texts, $existingTranslations, $language, $translator);
-
-        if ($this->option('diff')) {
-            $this->info("Showing diff for {$language}:");
-            foreach (array_keys($texts) as $key) {
-                $this->line("+ \"$key\": \"{$updatedTranslations[$key]}\"");
-            }
-        }
-
-        if ($this->option('write')) {
-
-            $directory = dirname($path);
-            is_dir($directory) || mkdir($directory, 0755, true);
-
-            file_put_contents(
-                $path,
-                json_encode($updatedTranslations, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-            );
-            $this->info("Translation file updated: {$path}");
-        } else {
-            $this->info("Run with --write to save changes for {$language}.");
-        }
-    }
-
-    /**
-     * Fill translations for the given keys and language.
-     *
-     * @param  array  $newKeys
-     * @param  array  $translations
-     * @param  string  $language
-     * @param  object|null  $translator
-     * @return array
-     */
-    protected function fillTranslations(array $texts, array $translations, string $language, $translator = null): array
-    {
-        $defaultLanguage = config('app.locale');
-
-        foreach ($texts as $key => $stringToTranslate) {
-            if ($translator) {
-                $results = $translator->translate($stringToTranslate, $defaultLanguage, [$language]);
-                $translations[$key] = $results[$language] ?? $stringToTranslate;
-            } else {
-                $translations[$key] = $key;
-            }
-        }
-
-        return $translations;
-    }
-
-    /**
-     * Extract translation keys from all project files.
+     * Extract translation keys from project files.
      *
      * @param  iterable  $files
-     * @return array
+     * @return array<string, string>  Key-value pairs of translatable strings.
      */
     protected function extractTextsFromFiles(iterable $files): array
     {
@@ -164,7 +162,6 @@ class ScanTranslationsCommand extends Command
         foreach ($files as $file) {
             $content = file_get_contents($file->getRealPath());
 
-            $matches = [];
             preg_match_all("/Text::get\(\s*['\"](.*?)['\"]\s*,\s*['\"](.*?)['\"]/", $content, $matches1);
             preg_match_all("/@text\(\s*['\"](.*?)['\"]\s*,\s*['\"](.*?)['\"]/", $content, $matches2);
             preg_match_all("/(?<!->)\btext\(\s*['\"](.*?)['\"]\s*,\s*['\"](.*?)['\"]/", $content, $matches3);
@@ -203,7 +200,6 @@ class ScanTranslationsCommand extends Command
     protected function handleDryRun(array $texts): void
     {
         $this->info('Dry run: these keys would be added:');
-
         foreach ($texts as $key => $value) {
             $this->line("- $key: $value");
         }
