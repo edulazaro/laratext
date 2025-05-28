@@ -10,8 +10,8 @@ if (!function_exists('text')) {
      * @param string $default
      * @return string
      */
-    function text(string $key, string $default = ''): string
+    function text(string $key, string $default = '', array $replace = [], ?string $locale = null): string
     {
-        return Text::get($key, $default);
+        return Text::get($key, $default, $replace, $locale);
     }
 }

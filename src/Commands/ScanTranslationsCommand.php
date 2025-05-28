@@ -30,17 +30,17 @@ class ScanTranslationsCommand extends Command
         $this->info('Scanning project for translation keys...');
 
         $files = $this->getProjectFiles();
-        $keys = $this->extractKeysFromFiles($files);
+        $texts = $this->extractTextsFromFiles($files);
 
-        if (empty($keys)) {
+        if (empty($texts)) {
             $this->info('No translation keys found.');
             return;
         }
 
-        $this->info('Found ' . count($keys) . ' unique keys.');
+        $this->info('Found ' . count($texts) . ' unique keys.');
 
         if ($this->option('dry')) {
-            return $this->handleDryRun($keys);
+            return $this->handleDryRun($texts);
         }
 
         $translator = $this->resolveTranslator($this->option('translator'));
@@ -50,7 +50,7 @@ class ScanTranslationsCommand extends Command
             : array_keys(config('texts.languages'));
 
         foreach ($languages as $language) {
-            $this->processLanguage($language, $keys, $translator);
+            $this->processLanguage($language, $texts, $translator);
         }
 
         $this->info('All languages processed.');
@@ -83,7 +83,7 @@ class ScanTranslationsCommand extends Command
      * @param  object|null  $translator
      * @return void
      */
-    protected function processLanguage(string $language, array $keys, $translator = null): void
+    protected function processLanguage(string $language, array $texts, $translator = null): void
     {
         $this->info("Processing language: {$language}");
 
@@ -92,23 +92,30 @@ class ScanTranslationsCommand extends Command
             ? json_decode(file_get_contents($path), true)
             : [];
 
-        $newKeys = array_diff($keys, array_keys($existingTranslations));
 
-        if (empty($newKeys)) {
+        $newKeys = array_diff(array_keys($texts), array_keys($existingTranslations));
+
+        $texts = array_intersect_key($texts, array_flip($newKeys));
+
+        if (empty($texts)) {
             $this->info("No new keys to add for {$language}.");
             return;
         }
 
-        $updatedTranslations = $this->fillTranslations($newKeys, $existingTranslations, $language, $translator);
+        $updatedTranslations = $this->fillTranslations($texts, $existingTranslations, $language, $translator);
 
         if ($this->option('diff')) {
             $this->info("Showing diff for {$language}:");
-            foreach ($newKeys as $key) {
+            foreach (array_keys($texts) as $key) {
                 $this->line("+ \"$key\": \"{$updatedTranslations[$key]}\"");
             }
         }
 
         if ($this->option('write')) {
+
+            $directory = dirname($path);
+            is_dir($directory) || mkdir($directory, 0755, true);
+
             file_put_contents(
                 $path,
                 json_encode($updatedTranslations, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
@@ -128,14 +135,14 @@ class ScanTranslationsCommand extends Command
      * @param  object|null  $translator
      * @return array
      */
-    protected function fillTranslations(array $newKeys, array $translations, string $language, $translator = null): array
+    protected function fillTranslations(array $texts, array $translations, string $language, $translator = null): array
     {
         $defaultLanguage = config('app.locale');
 
-        foreach ($newKeys as $key) {
+        foreach ($texts as $key => $stringToTranslate) {
             if ($translator) {
-                $results = $translator->translate($key, $defaultLanguage, [$language]);
-                $translations[$key] = $results[$language] ?? $key;
+                $results = $translator->translate($stringToTranslate, $defaultLanguage, [$language]);
+                $translations[$key] = $results[$language] ?? $stringToTranslate;
             } else {
                 $translations[$key] = $key;
             }
@@ -150,21 +157,27 @@ class ScanTranslationsCommand extends Command
      * @param  iterable  $files
      * @return array
      */
-    protected function extractKeysFromFiles(iterable $files): array
+    protected function extractTextsFromFiles(iterable $files): array
     {
-        $keys = [];
+        $keyValuePairs = [];
 
         foreach ($files as $file) {
             $content = file_get_contents($file->getRealPath());
 
-            preg_match_all("/Text::get\\(['\"](.*?)['\"]/", $content, $matches1);
-            preg_match_all("/@text\\(['\"](.*?)['\"]/", $content, $matches2);
-            preg_match_all("/text\\(['\"](.*?)['\"]/", $content, $matches3);
+            $matches = [];
+            preg_match_all("/Text::get\(\s*['\"](.*?)['\"]\s*,\s*['\"](.*?)['\"]/", $content, $matches1);
+            preg_match_all("/@text\(\s*['\"](.*?)['\"]\s*,\s*['\"](.*?)['\"]/", $content, $matches2);
+            preg_match_all("/(?<!->)\btext\(\s*['\"](.*?)['\"]\s*,\s*['\"](.*?)['\"]/", $content, $matches3);
 
-            $keys = array_merge($keys, $matches1[1], $matches2[1], $matches3[1]);
+            foreach ([$matches1, $matches2, $matches3] as $match) {
+                foreach ($match[1] as $i => $key) {
+                    $value = $match[2][$i] ?? $key;
+                    $keyValuePairs[$key] = $value;
+                }
+            }
         }
 
-        return array_unique($keys);
+        return $keyValuePairs;
     }
 
     /**
@@ -176,7 +189,7 @@ class ScanTranslationsCommand extends Command
     {
         return (new Finder())
             ->in(base_path())
-            ->exclude(['vendor', 'node_modules', 'storage', 'bootstrap/cache'])
+            ->exclude(['vendor', 'node_modules', 'storage', 'bootstrap/cache', 'tests'])
             ->name('*.php')
             ->name('*.blade.php');
     }
@@ -187,12 +200,12 @@ class ScanTranslationsCommand extends Command
      * @param  array  $newKeys
      * @return void
      */
-    protected function handleDryRun(array $newKeys): void
+    protected function handleDryRun(array $texts): void
     {
         $this->info('Dry run: these keys would be added:');
 
-        foreach ($newKeys as $key) {
-            $this->line("- $key");
+        foreach ($texts as $key => $value) {
+            $this->line("- $key: $value");
         }
     }
 }
