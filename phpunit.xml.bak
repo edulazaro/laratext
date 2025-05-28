@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit
+    bootstrap="vendor/autoload.php"
+    colors="true"
+    stopOnFailure="false"
+    failOnRisky="true"
+    failOnWarning="true"
+    verbose="true"
+>
+    <testsuites>
+        <testsuite name="Laratext Tests">
+            <directory>tests</directory>
+        </testsuite>
+    </testsuites>
+
+
+</phpunit>

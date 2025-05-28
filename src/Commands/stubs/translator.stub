@@ -3,8 +3,9 @@
 namespace {{ namespace }};
 
 use EduLazaro\Laratext\Contracts\TranslatorInterface;
+use EduLazaro\Laratext\Translator;
 
-class {{ class }} implements TranslatorInterface
+class {{ class }} extends Translator implements TranslatorInterface
 {
     public function translate(string $text, string $from, array $to): array
     {

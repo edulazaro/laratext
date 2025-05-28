@@ -161,6 +161,20 @@ class BeautifulTranslator implements TranslatorInterface
 }
 ```
 
+The `translate` method, which translates a single string into one or more target languages, is required:
+
+```
+translate(string $text, string $from, array $to): array
+```
+
+Optionally, you can implement the `translateMany` method to translate multiple texts in batch, which can improve performance when supported by the translation API:
+
+```
+translateMany(array $texts, string $from, array $to): array
+```
+
+If `translateMany` is not implemented, only single-string translations (translate) will be available for batch processing. For full support, both methods are recommended, so there are less requests and create a cost effective solution.
+
 ## License
 
 Larakeep is open-sourced software licensed under the [MIT license](LICENSE.md).
