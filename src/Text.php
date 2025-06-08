@@ -8,6 +8,14 @@ class Text
     {
         $translation = __($key, $replace, $locale);
 
-        return $translation !== $key ? $translation : $default ?? $key;
+        if ($translation === $key) {
+            $translation = $default ?? $key;
+
+            foreach ($replace as $search => $value) {
+                $translation = str_replace(':'.$search, $value, $translation);
+            }
+        }
+
+        return $translation;
     }
 }
