@@ -14,6 +14,26 @@ class TextTest extends TestCase
     }
 
     /** @test */
+    public function it_replaces_placeholders_in_default_value_when_translation_missing()
+    {
+        $result = Text::get('non.existent.key', 'Hello, :name!', ['name' => 'Edu']);
+        $this->assertEquals('Hello, Edu!', $result);
+    }
+
+    /** @test */
+    public function it_replaces_placeholders_in_existing_translation()
+    {
+        // Fake translation with placeholder
+        $langFile = lang_path('en.json');
+        file_put_contents($langFile, json_encode([
+            'greeting.message' => 'Hi, :name!',
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+
+        $result = Text::get('greeting.message', 'Fallback :name', ['name' => 'Edu']);
+        $this->assertEquals('Hi, Edu!', $result);
+    }
+
+    /** @test */
     public function it_returns_helper_function_value_if_translation_missing()
     {
         $result = text('non.existent.key', 'Default Helper');
