@@ -38,7 +38,7 @@ class GoogleTranslator extends Translator implements TranslatorInterface
     public function translateMany(array $texts, string $from, array $to): array
     {
         $apiKey = config('texts.google.api_key');
-        $timeout = config('texts.google.timeout', 10);
+        $timeout = config('texts.google.timeout', 20);
         $maxRetries = config('texts.google.retries', 3);
 
         $results = [];
@@ -70,7 +70,7 @@ class GoogleTranslator extends Translator implements TranslatorInterface
 
         return $results;
     }
-    
+
 
     /**
      * Perform the translation request for a single target language.

@@ -10,3 +10,12 @@ Text::get('key.escaped.single.php', 'PHP with escaped \'single\' quotes');
 
 text('key.helper', 'Helper function call');
 text('key.nospace','No space in call');
+
+@text('key.blade.welcome_user', 'Welcome, :name!')
+@text('key.blade.items_in_cart', 'You have :count items in your cart, :name.')
+@text('key.blade.file_uploaded', ':count file uploaded.')
+@text('key.blade.files_uploaded', ':count files uploaded.')
+
+@text('key.blade.order_status', 'Your order #:order_id is :status.')
+
+@text('key.blade.placeholder_escaped', "This is a placeholder: ':name' that should not replace.")

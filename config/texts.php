@@ -33,7 +33,7 @@ return [
     'openai' => [
         'api_key' => env('OPENAI_API_KEY'),
         'model' => env('OPENAI_MODEL', 'gpt-3.5-turbo'),
-        'timeout' => 10,
+        'timeout' => 60,
         'retries' => 3,
     ],
 
@@ -49,7 +49,7 @@ return [
 
     'google' => [
         'api_key' => env('GOOGLE_TRANSLATOR_API_KEY'),
-        'timeout' => 10,
+        'timeout' => 20,
         'retries' => 3,
     ],
 

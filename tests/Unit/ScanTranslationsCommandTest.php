@@ -65,14 +65,14 @@ class ScanTranslationsCommandTest extends TestCase
     public function it_extracts_texts_from_php_fixture_file_correctly()
     {
         $filePath = __DIR__ . '/../Fixtures/test.php';
-        $command = app(ScanTranslationsCommand::class);
+        $command = app(\EduLazaro\Laratext\Commands\ScanTranslationsCommand::class);
 
-        $finder = (new Finder())
+        $finder = (new \Symfony\Component\Finder\Finder())
             ->files()
             ->name('test.php')
             ->in(dirname($filePath));
 
-        $result = (new ReflectionClass($command))
+        $result = (new \ReflectionClass($command))
             ->getMethod('extractTextsFromFiles')
             ->invoke($command, $finder);
 
@@ -83,6 +83,13 @@ class ScanTranslationsCommandTest extends TestCase
             'key.escaped.single.php' => "PHP with escaped 'single' quotes",
             'key.helper' => 'Helper function call',
             'key.nospace' => 'No space in call',
+            'key.welcome_user' => 'Welcome, :name!',
+            'key.items_in_cart' => 'You have :count items in your cart, :name.',
+            'key.file_uploaded' => ':count file uploaded.',
+            'key.files_uploaded' => ':count files uploaded.',
+            'key.hello_user' => 'Hello, :name!',
+            'key.order_status' => 'Your order #:order_id is :status.',
+            'key.placeholder_escaped' => "This is a placeholder: ':name' that should not replace.",
         ];
 
         $this->assertEqualsCanonicalizing($expected, $result);
@@ -92,14 +99,14 @@ class ScanTranslationsCommandTest extends TestCase
     public function it_extracts_texts_from_blade_fixture_file_correctly()
     {
         $filePath = __DIR__ . '/../Fixtures/test.blade.php';
-        $command = app(ScanTranslationsCommand::class);
+        $command = app(\EduLazaro\Laratext\Commands\ScanTranslationsCommand::class);
 
-        $finder = (new Finder())
+        $finder = (new \Symfony\Component\Finder\Finder())
             ->files()
             ->name('test.blade.php')
             ->in(dirname($filePath));
 
-        $result = (new ReflectionClass($command))
+        $result = (new \ReflectionClass($command))
             ->getMethod('extractTextsFromFiles')
             ->invoke($command, $finder);
 
@@ -109,6 +116,14 @@ class ScanTranslationsCommandTest extends TestCase
             'key.single.inside' => "Value with 'single' quotes inside",
             'key.double.inside' => 'Value with "double" quotes inside',
             'key.escaped.double' => 'Value with escaped "double" quotes',
+
+            // Newly added placeholders
+            'key.blade.welcome_user' => 'Welcome, :name!',
+            'key.blade.items_in_cart' => 'You have :count items in your cart, :name.',
+            'key.blade.file_uploaded' => ':count file uploaded.',
+            'key.blade.files_uploaded' => ':count files uploaded.',
+            'key.blade.order_status' => 'Your order #:order_id is :status.',
+            'key.blade.placeholder_escaped' => "This is a placeholder: ':name' that should not replace.",
 
             // From Text::get() calls
             'key.simple.php' => 'Simple PHP value',
