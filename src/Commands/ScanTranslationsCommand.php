@@ -78,7 +78,9 @@ class ScanTranslationsCommand extends Command
 
         $translations = [];
 
-        if ($translator && method_exists($translator, 'translateMany')) {
+        if ($translator && method_exists($translator, 'batchTranslate')) {
+            $translations = $translator->batchTranslate($missingTexts, $defaultLanguage, $languages);
+        } elseif ($translator && method_exists($translator, 'translateMany')) {
             $translations = $translator->translateMany($missingTexts, $defaultLanguage, $languages);
         } elseif ($translator) {
             foreach ($missingTexts as $key => $value) {

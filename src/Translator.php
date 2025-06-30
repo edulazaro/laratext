@@ -9,7 +9,25 @@ abstract class Translator implements TranslatorInterface
     /**
      * Maximum payload size per request, in characters.
      */
-    protected int $maxPayloadChars = 10000;
+    protected int $maxPayloadChars = 2000;
+
+    /**
+     * Maximum texts per request
+     */
+    protected int $maxBatchItems = 100;
+
+    /**
+     * Outputs a message to the terminal only when running in the console.
+     *
+     * @param string $message The message to display in the terminal.
+     * @return void
+     */
+    protected function logToConsole(string $message): void
+    {
+        if (app()->runningInConsole()) {
+            echo "\n{$message}\n";
+        }
+    }
 
     /**
      * Translate a large set of texts, automatically splitting them into safe batches
@@ -45,9 +63,13 @@ abstract class Translator implements TranslatorInterface
         $currentLength = 0;
 
         foreach ($texts as $key => $text) {
-            $textLength = mb_strlen($text, 'UTF-8');
 
-            if ($currentLength + $textLength > $this->maxPayloadChars && !empty($currentBatch)) {
+            $textLength = mb_strlen($text, 'UTF-8') + mb_strlen($key, 'UTF-8') + 4;
+
+            if (
+                (!empty($currentBatch) && ($currentLength + $textLength > $this->maxPayloadChars))
+                || (count($currentBatch) >= $this->maxBatchItems)
+            ) {
                 $batches[] = $currentBatch;
                 $currentBatch = [];
                 $currentLength = 0;
