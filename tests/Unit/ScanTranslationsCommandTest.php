@@ -3,6 +3,8 @@
 use EduLazaro\Laratext\Tests\TestCase;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
+use EduLazaro\Laratext\Commands\ScanTranslationsCommand;
+use Symfony\Component\Finder\Finder;
 
 class ScanTranslationsCommandTest extends TestCase
 {
@@ -57,6 +59,69 @@ class ScanTranslationsCommandTest extends TestCase
 
         $this->assertEquals('Welcome', $enContent['pages.home.welcome']);
         $this->assertEquals('Bienvenido', $esContent['pages.home.welcome']);
+    }
+
+    /** @test */
+    public function it_extracts_texts_from_php_fixture_file_correctly()
+    {
+        $filePath = __DIR__ . '/../Fixtures/test.php';
+        $command = app(ScanTranslationsCommand::class);
+
+        $finder = (new Finder())
+            ->files()
+            ->name('test.php')
+            ->in(dirname($filePath));
+
+        $result = (new ReflectionClass($command))
+            ->getMethod('extractTextsFromFiles')
+            ->invoke($command, $finder);
+
+        $expected = [
+            'key.simple.php' => 'Simple PHP value',
+            'key.single.inside.php' => "PHP with 'single' quotes inside",
+            'key.double.inside.php' => 'PHP with "double" quotes inside',
+            'key.escaped.single.php' => "PHP with escaped 'single' quotes",
+            'key.helper' => 'Helper function call',
+            'key.nospace' => 'No space in call',
+        ];
+
+        $this->assertEqualsCanonicalizing($expected, $result);
+    }
+
+    /** @test */
+    public function it_extracts_texts_from_blade_fixture_file_correctly()
+    {
+        $filePath = __DIR__ . '/../Fixtures/test.blade.php';
+        $command = app(ScanTranslationsCommand::class);
+
+        $finder = (new Finder())
+            ->files()
+            ->name('test.blade.php')
+            ->in(dirname($filePath));
+
+        $result = (new ReflectionClass($command))
+            ->getMethod('extractTextsFromFiles')
+            ->invoke($command, $finder);
+
+        $expected = [
+            // From @text() calls
+            'key.simple' => 'Simple value',
+            'key.single.inside' => "Value with 'single' quotes inside",
+            'key.double.inside' => 'Value with "double" quotes inside',
+            'key.escaped.double' => 'Value with escaped "double" quotes',
+
+            // From Text::get() calls
+            'key.simple.php' => 'Simple PHP value',
+            'key.single.inside.php' => "PHP with 'single' quotes inside",
+            'key.double.inside.php' => 'PHP with "double" quotes inside',
+            'key.escaped.single.php' => "PHP with escaped 'single' quotes",
+
+            // From text() helper calls
+            'key.helper' => 'Helper function call',
+            'key.nospace' => 'No space in call',
+        ];
+
+        $this->assertEqualsCanonicalizing($expected, $result);
     }
 
     protected function tearDown(): void

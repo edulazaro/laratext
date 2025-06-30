@@ -45,7 +45,7 @@ class TextTest extends TestCase
     {
         $blade = "@text('non.existent.key', 'Default Blade')";
         $rendered = Blade::render($blade);
-        $this->assertStringContainsString('Default Blade', $rendered);
+        $this->assertEquals('Default Blade', $rendered);
     }
 
     /** @test */
@@ -66,5 +66,28 @@ class TextTest extends TestCase
         $blade = "@text('pages.home.welcome', 'Default Blade')";
         $rendered = Blade::render($blade);
         $this->assertStringContainsString('Welcome!', $rendered);
+    }
+
+    /** @test */
+    public function it_returns_existing_translation_from_file_with_placeholders()
+    {
+        // Prepare a fake translation file with placeholders
+        $langFile = lang_path('en.json');
+        file_put_contents($langFile, json_encode([
+            'pages.home.welcome' => 'Welcome, :name!',
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+
+        // Text::get with replacements
+        $result = Text::get('pages.home.welcome', 'Default :name', ['name' => 'Edu']);
+        $this->assertEquals('Welcome, Edu!', $result);
+
+        // text() helper with replacements
+        $helperResult = text('pages.home.welcome', 'Default :name', ['name' => 'Edu']);
+        $this->assertEquals('Welcome, Edu!', $helperResult);
+
+        // @text Blade directive with replacements
+        $blade = "@text('pages.home.welcome', 'Default :name', ['name' => 'Edu'])";
+        $rendered = Blade::render($blade);
+        $this->assertEquals('Welcome, Edu!', $rendered);
     }
 }

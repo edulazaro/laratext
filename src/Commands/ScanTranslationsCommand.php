@@ -162,13 +162,27 @@ class ScanTranslationsCommand extends Command
         foreach ($files as $file) {
             $content = file_get_contents($file->getRealPath());
 
-            preg_match_all("/Text::get\(\s*['\"](.*?)['\"]\s*,\s*['\"](.*?)['\"]/", $content, $matches1);
-            preg_match_all("/@text\(\s*['\"](.*?)['\"]\s*,\s*['\"](.*?)['\"]/", $content, $matches2);
-            preg_match_all("/(?<!->)\btext\(\s*['\"](.*?)['\"]\s*,\s*['\"](.*?)['\"]/", $content, $matches3);
+            preg_match_all(
+                "/Text::get\(\s*(['\"])(.*?)\\1\s*,\s*(['\"])((?:\\\\.|(?!\\3).)*?)\\3/s",
+                $content,
+                $matches1
+            );
+
+            preg_match_all(
+                "/@text\(\s*(['\"])(.*?)\\1\s*,\s*(['\"])((?:\\\\.|(?!\\3).)*?)\\3/s",
+                $content,
+                $matches2
+            );
+
+            preg_match_all(
+                "/(?<!->)\btext\(\s*(['\"])(.*?)\\1\s*,\s*(['\"])((?:\\\\.|(?!\\3).)*?)\\3/s",
+                $content,
+                $matches3
+            );
 
             foreach ([$matches1, $matches2, $matches3] as $match) {
-                foreach ($match[1] as $i => $key) {
-                    $value = $match[2][$i] ?? $key;
+                foreach ($match[2] as $i => $key) {
+                    $value = stripcslashes($match[4][$i] ?? $key);
                     $keyValuePairs[$key] = $value;
                 }
             }
