@@ -110,10 +110,17 @@ Use the `@text` Blade directive to fetch translations within your views.
 
 ## Scanning Translations
 
-You can use the `laratext:scan` command to scan your project files for missing translation keys and optionally translate them into multiple languages.
+You can use the `laratext:scan` command to scan your project files for missing translation keys and translate them into multiple languages:
 
 ```php
-php artisan laratext:scan --write --lang=es --translator=google
+php artisan laratext:scan --write
+```
+
+You can also specify the target language or the translator to use:
+
+
+```php
+php artisan laratext:scan --write --lang=es --translator=openai
 ```
 
 These are the command Options:
