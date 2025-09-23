@@ -30,11 +30,12 @@ class ScanTranslationsCommand extends Command
         $this->info('Scanning project for translation keys...');
 
         $files = $this->getProjectFiles();
+        $this->info('Processing files...');
         $texts = $this->extractTextsFromFiles($files);
 
         if (empty($texts)) {
             $this->info('No translation keys found.');
-            return;
+            return 0;
         }
 
         $this->info('Found ' . count($texts) . ' unique keys.');
@@ -61,6 +62,7 @@ class ScanTranslationsCommand extends Command
         }
 
         // Determine missing keys per language
+        $this->info('Checking for missing translations...');
         $missingTexts = [];
         foreach ($texts as $key => $value) {
             foreach ($languages as $lang) {
@@ -73,21 +75,25 @@ class ScanTranslationsCommand extends Command
 
         if (empty($missingTexts)) {
             $this->info("No new keys to translate.");
-            return;
+            return 0;
         }
 
         $translations = [];
 
         if ($translator && method_exists($translator, 'batchTranslate')) {
+            $this->info('Using batch translator...');
             $translations = $translator->batchTranslate($missingTexts, $defaultLanguage, $languages);
         } elseif ($translator && method_exists($translator, 'translateMany')) {
+            $this->info('Using translateMany...');
             $translations = $translator->translateMany($missingTexts, $defaultLanguage, $languages);
         } elseif ($translator) {
+            $this->info('Translating ' . count($missingTexts) . ' texts individually...');
             foreach ($missingTexts as $key => $value) {
                 $results = $translator->translate($value, $defaultLanguage, $languages);
                 $translations[$key] = $results;
             }
         } else {
+            $this->info('No translator configured, using original values...');
             foreach ($missingTexts as $key => $value) {
                 $translations[$key] = [];
                 foreach ($languages as $lang) {
@@ -96,6 +102,9 @@ class ScanTranslationsCommand extends Command
             }
         }
 
+        $this->info('Translation process completed.');
+
+        $this->info('Writing translation files...');
         foreach ($languages as $lang) {
             $path = lang_path("{$lang}.json");
             $current = $existingTranslations[$lang] ?? [];
@@ -131,6 +140,7 @@ class ScanTranslationsCommand extends Command
         }
 
         $this->info('All translations processed.');
+        return 0;
     }
 
     /**
@@ -164,6 +174,7 @@ class ScanTranslationsCommand extends Command
         foreach ($files as $file) {
             $content = file_get_contents($file->getRealPath());
 
+            // Two-parameter patterns (existing functionality)
             preg_match_all(
                 "/Text::get\(\s*(['\"])(.*?)\\1\s*,\s*(['\"])((?:\\\\.|(?!\\3).)*?)\\3/s",
                 $content,
@@ -182,10 +193,53 @@ class ScanTranslationsCommand extends Command
                 $matches3
             );
 
+            // Single-parameter patterns (new functionality)
+            // Remove two-parameter matches from content first to avoid conflicts
+            $contentForSingle = $content;
+
+            // Remove each two-parameter match individually
+            if (!empty($matches1[0])) {
+                $contentForSingle = str_replace($matches1[0], '', $contentForSingle);
+            }
+            if (!empty($matches2[0])) {
+                $contentForSingle = str_replace($matches2[0], '', $contentForSingle);
+            }
+            if (!empty($matches3[0])) {
+                $contentForSingle = str_replace($matches3[0], '', $contentForSingle);
+            }
+
+            preg_match_all(
+                "/Text::get\(\s*(['\"])(.*?)\\1\s*\)/",
+                $contentForSingle,
+                $matches1_single
+            );
+
+            preg_match_all(
+                "/@text\(\s*(['\"])(.*?)\\1\s*\)/",
+                $contentForSingle,
+                $matches2_single
+            );
+
+            preg_match_all(
+                "/(?<!->)\btext\(\s*(['\"])(.*?)\\1\s*\)/",
+                $contentForSingle,
+                $matches3_single
+            );
+
+            // Process two-parameter matches first
             foreach ([$matches1, $matches2, $matches3] as $match) {
                 foreach ($match[2] as $i => $key) {
                     $value = stripcslashes($match[4][$i] ?? $key);
                     $keyValuePairs[$key] = $value;
+                }
+            }
+
+            // Process single-parameter matches
+            foreach ([$matches1_single, $matches2_single, $matches3_single] as $match) {
+                foreach ($match[2] as $key) {
+                    if (!isset($keyValuePairs[$key])) {
+                        $keyValuePairs[$key] = $this->generateDefaultValue($key);
+                    }
                 }
             }
         }
@@ -219,5 +273,19 @@ class ScanTranslationsCommand extends Command
         foreach ($texts as $key => $value) {
             $this->line("- $key: $value");
         }
+    }
+
+    /**
+     * Generate a default value from a translation key.
+     *
+     * Converts underscores to spaces and capitalizes the first letter.
+     *
+     * @param  string  $key
+     * @return string
+     */
+    protected function generateDefaultValue(string $key): string
+    {
+        // Replace underscores with spaces and capitalize first letter
+        return ucfirst(str_replace('_', ' ', $key));
     }
 }

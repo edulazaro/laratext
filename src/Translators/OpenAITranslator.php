@@ -37,7 +37,7 @@ class OpenAITranslator extends Translator implements TranslatorInterface
                 'messages' => [
                     [
                         'role' => 'system',
-                        'content' => "You are a helpful assistant that translates from {$from} into multiple languages: {$languagesList}. Reply with a JSON object, where each property is the language code and the value is the translated text. Preserve placeholders like :name, :count, or any text wrapped in colons (:) exactly as they are.",
+                        'content' => "You are a helpful assistant that translates from {$from} into multiple languages: {$languagesList}. Reply with a JSON object, where each property is the language code and the value is the translated text. IMPORTANT: preserve the original input keys exactly; do NOT restructure, group, or nest keys under a common prefix. If the input contains placeholders like :name or :count or tokens wrapped in colons, preserve them exactly. Respond ONLY with a valid JSON object and nothing else.",
                     ],
                     [
                         'role' => 'user',
@@ -91,7 +91,7 @@ class OpenAITranslator extends Translator implements TranslatorInterface
                 'messages' => [
                     [
                         'role' => 'system',
-                        'content' => "You are a helpful assistant that translates JSON key-value pairs from {$from} into multiple languages: {$languagesList}. Reply with a JSON object where each key from the input maps to an object of translations per language. Preserve any placeholder like :name, :count, or any text wrapped in colons (:).",
+                        'content' => "You are a helpful assistant that translates JSON key-value pairs from {$from} into multiple languages: {$languagesList}. Reply with a JSON object where each top-level key from the input is preserved exactly and maps to an object of translations per language. DO NOT group or nest keys by common prefixes; keep the same keys as the input. Example input: {\"property_installation_type_central\": \"Central\", \"property_installation_type_individual\": \"Individual\"} -> Expected output: {\"property_installation_type_central\": {\"es\": \"Central\"}, \"property_installation_type_individual\": {\"es\": \"Individual\"}}. Preserve placeholders and return valid JSON only.",
                     ],
                     [
                         'role' => 'user',
