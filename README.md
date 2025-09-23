@@ -108,6 +108,42 @@ Use the `@text` Blade directive to fetch translations within your views.
 @text('key_name', 'default_value')
 ```
 
+### Replacement Texts (Placeholders)
+
+You can include placeholders in your text strings using the `:placeholder` syntax. These placeholders will be preserved during translation and can be replaced with actual values when displaying the text.
+
+**Basic usage without replacements:**
+```php
+// PHP - displays text as-is with placeholders
+echo text('welcome.user', 'Welcome, :name!');
+// Output: "Welcome, :name!"
+```
+
+```blade
+{{-- Blade - displays text as-is with placeholders --}}
+@text('welcome.user', 'Welcome, :name!')
+{{-- Output: "Welcome, :name!" --}}
+```
+
+**Usage with replacement values:**
+```php
+// PHP - replaces placeholders with actual values
+echo text('welcome.user', 'Welcome, :name!', ['name' => 'John']);
+// Output: "Welcome, John!" (or "¡Bienvenido, John!" in Spanish)
+
+echo text('items.count', 'You have :count items.', ['count' => 5]);
+// Output: "You have 5 items." (or "Tienes 5 artículos." in Spanish)
+```
+
+```blade
+{{-- Blade - both syntaxes work identically --}}
+{{ text('welcome.user', 'Welcome, :name!', ['name' => $user->name]) }}
+@text('items.count', 'You have :count items in your cart.', ['count' => $cartItems])
+@text('file.uploaded', ':count file uploaded.', ['count' => $fileCount])
+```
+
+When these texts are scanned and translated, the placeholders (`:name`, `:count`, etc.) will be preserved in all target languages.
+
 ## Scanning Translations
 
 You can use the `laratext:scan` command to scan your project files for missing translation keys and translate them into multiple languages:
@@ -129,7 +165,18 @@ These are the command Options:
 * `--lang`: Target a specific language for translation (e.g., es for Spanish).
 * `--dry` Perform a dry run (do not write).
 * `--diff`: Show the diff of the changes made.
+* `--resync`: Retranslate texts when source language values have changed.
 * `--translator`: Specify the translator service to use (e.g., openai or google).
+
+### Resyncing Changed Translations
+
+By default, the scan command only processes missing translation keys. If you've updated the source text for an existing key, use the `--resync` option to retranslate all languages when source values have changed:
+
+```bash
+php artisan laratext:scan --write --resync
+```
+
+This is useful when you've modified existing text in your code and want to update all translations to reflect the changes. Without `--resync`, only missing keys are translated, but existing keys with changed source values are left unchanged.
 
 
 ## Creating translators

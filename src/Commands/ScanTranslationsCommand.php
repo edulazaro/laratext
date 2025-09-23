@@ -16,6 +16,7 @@ class ScanTranslationsCommand extends Command
                             {--lang= : Target specific language}
                             {--dry : Dry run, do not write}
                             {--diff : Show diff of changes}
+                            {--resync : Retranslate texts when source language values have changed}
                             {--translator= : Translator service to use (optional)}';
 
     protected $description = 'Scan project files and update translation files with missing keys.';
@@ -63,11 +64,19 @@ class ScanTranslationsCommand extends Command
         // Determine missing keys per language
         $missingTexts = [];
         foreach ($texts as $key => $value) {
+            // Check if key is missing in any language
             foreach ($languages as $lang) {
                 if (!array_key_exists($key, $existingTranslations[$lang])) {
                     $missingTexts[$key] = $value;
-                    break;
+                    continue 2;
                 }
+            }
+
+            // Check if source language value has changed (only when --resync is used)
+            if ($this->option('resync') &&
+                array_key_exists($key, $existingTranslations[$defaultLanguage]) &&
+                $existingTranslations[$defaultLanguage][$key] !== $value) {
+                $missingTexts[$key] = $value;
             }
         }
 
@@ -101,9 +110,7 @@ class ScanTranslationsCommand extends Command
             $current = $existingTranslations[$lang] ?? [];
 
             foreach ($translations as $key => $langs) {
-                if (!array_key_exists($key, $current)) {
-                    $current[$key] = $langs[$lang] ?? $key;
-                }
+                $current[$key] = $langs[$lang] ?? $key;
             }
 
             if ($this->option('diff')) {

@@ -139,6 +139,184 @@ class ScanTranslationsCommandTest extends TestCase
         $this->assertEqualsCanonicalizing($expected, $result);
     }
 
+    /** @test */
+    public function it_retranslates_when_source_value_changes()
+    {
+        // First, create existing translation files with initial translations
+        File::put(lang_path('en.json'), json_encode([
+            'pages.home.welcome' => 'Welcome',
+            'pages.about.title' => 'About Us'
+        ]));
+        File::put(lang_path('es.json'), json_encode([
+            'pages.home.welcome' => 'Bienvenido',
+            'pages.about.title' => 'Acerca de nosotros'
+        ]));
+
+        // Update the blade file with one changed value and one unchanged
+        File::put(resource_path('views/test.blade.php'),
+            "@text('pages.home.welcome', 'Welcome to our site')\n" .
+            "@text('pages.about.title', 'About Us')"
+        );
+
+        Http::fake([
+            'api.openai.com/*' => Http::response([
+                'choices' => [
+                    [
+                        'message' => [
+                            'content' => json_encode([
+                                'pages.home.welcome' => [
+                                    'en' => 'Welcome to our site',
+                                    'es' => 'Bienvenido a nuestro sitio',
+                                ]
+                            ]),
+                        ],
+                    ],
+                ],
+            ]),
+        ]);
+
+        $this->artisan('laratext:scan --write --resync --translator=openai')
+            ->expectsOutput('Scanning project for translation keys...')
+            ->expectsOutput('Found 2 unique keys.')
+            ->expectsOutput('Translation file updated: ' . lang_path('en.json'))
+            ->expectsOutput('Translation file updated: ' . lang_path('es.json'))
+            ->expectsOutput('All translations processed.')
+            ->assertExitCode(0);
+
+        $enContent = json_decode(File::get(lang_path('en.json')), true);
+        $esContent = json_decode(File::get(lang_path('es.json')), true);
+
+        // Verify only the changed translation was updated
+        $this->assertEquals('Welcome to our site', $enContent['pages.home.welcome']);
+        $this->assertEquals('Bienvenido a nuestro sitio', $esContent['pages.home.welcome']);
+
+        // Verify the unchanged translation remained the same
+        $this->assertEquals('About Us', $enContent['pages.about.title']);
+        $this->assertEquals('Acerca de nosotros', $esContent['pages.about.title']);
+    }
+
+    /** @test */
+    public function it_detects_multiple_changed_values_and_retranslates_them()
+    {
+        // Create existing translation files with initial translations
+        File::put(lang_path('en.json'), json_encode([
+            'pages.home.welcome' => 'Welcome',
+            'pages.about.title' => 'About Us'
+        ]));
+        File::put(lang_path('es.json'), json_encode([
+            'pages.home.welcome' => 'Bienvenido',
+            'pages.about.title' => 'Acerca de nosotros'
+        ]));
+
+        // Create blade file with changed values
+        File::put(resource_path('views/test.blade.php'),
+            "@text('pages.home.welcome', 'Welcome to our amazing site')\n" .
+            "@text('pages.about.title', 'About Our Company')"
+        );
+
+        Http::fake([
+            'api.openai.com/*' => Http::response([
+                'choices' => [
+                    [
+                        'message' => [
+                            'content' => json_encode([
+                                'pages.home.welcome' => [
+                                    'en' => 'Welcome to our amazing site',
+                                    'es' => 'Bienvenido a nuestro increíble sitio',
+                                ],
+                                'pages.about.title' => [
+                                    'en' => 'About Our Company',
+                                    'es' => 'Acerca de nuestra empresa',
+                                ]
+                            ]),
+                        ],
+                    ],
+                ],
+            ]),
+        ]);
+
+        $this->artisan('laratext:scan --write --resync --translator=openai')
+            ->expectsOutput('Scanning project for translation keys...')
+            ->expectsOutput('Found 2 unique keys.')
+            ->assertExitCode(0);
+
+        $enContent = json_decode(File::get(lang_path('en.json')), true);
+        $esContent = json_decode(File::get(lang_path('es.json')), true);
+
+        // Verify both translations were updated
+        $this->assertEquals('Welcome to our amazing site', $enContent['pages.home.welcome']);
+        $this->assertEquals('About Our Company', $enContent['pages.about.title']);
+        $this->assertEquals('Bienvenido a nuestro increíble sitio', $esContent['pages.home.welcome']);
+        $this->assertEquals('Acerca de nuestra empresa', $esContent['pages.about.title']);
+    }
+
+    /** @test */
+    public function it_does_not_retranslate_unchanged_values()
+    {
+        // Create existing translation files
+        File::put(lang_path('en.json'), json_encode([
+            'pages.home.welcome' => 'Welcome',
+            'pages.about.title' => 'About Us'
+        ]));
+        File::put(lang_path('es.json'), json_encode([
+            'pages.home.welcome' => 'Bienvenido',
+            'pages.about.title' => 'Acerca de nosotros'
+        ]));
+
+        // Create blade file with same values (no changes)
+        File::put(resource_path('views/test.blade.php'),
+            "@text('pages.home.welcome', 'Welcome')\n" .
+            "@text('pages.about.title', 'About Us')"
+        );
+
+        $this->artisan('laratext:scan --write --translator=openai')
+            ->expectsOutput('Scanning project for translation keys...')
+            ->expectsOutput('No new keys to translate.')
+            ->assertExitCode(0);
+
+        // Verify HTTP was not called since no translation was needed
+        Http::assertNothingSent();
+    }
+
+    /** @test */
+    public function it_does_not_retranslate_changed_values_when_resync_is_disabled()
+    {
+        // Create existing translation files with initial translations
+        File::put(lang_path('en.json'), json_encode([
+            'pages.home.welcome' => 'Welcome',
+            'pages.about.title' => 'About Us'
+        ]));
+        File::put(lang_path('es.json'), json_encode([
+            'pages.home.welcome' => 'Bienvenido',
+            'pages.about.title' => 'Acerca de nosotros'
+        ]));
+
+        // Update the blade file with changed values
+        File::put(resource_path('views/test.blade.php'),
+            "@text('pages.home.welcome', 'Welcome to our amazing site')\n" .
+            "@text('pages.about.title', 'About Our Company')"
+        );
+
+        // Run without --resync flag
+        $this->artisan('laratext:scan --write --translator=openai')
+            ->expectsOutput('Scanning project for translation keys...')
+            ->expectsOutput('Found 2 unique keys.')
+            ->expectsOutput('No new keys to translate.')
+            ->assertExitCode(0);
+
+        $enContent = json_decode(File::get(lang_path('en.json')), true);
+        $esContent = json_decode(File::get(lang_path('es.json')), true);
+
+        // Verify translations were NOT updated (old values remain)
+        $this->assertEquals('Welcome', $enContent['pages.home.welcome']);
+        $this->assertEquals('About Us', $enContent['pages.about.title']);
+        $this->assertEquals('Bienvenido', $esContent['pages.home.welcome']);
+        $this->assertEquals('Acerca de nosotros', $esContent['pages.about.title']);
+
+        // Verify HTTP was not called since no retranslation occurred
+        Http::assertNothingSent();
+    }
+
     protected function tearDown(): void
     {
         // Clean up
