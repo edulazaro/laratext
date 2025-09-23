@@ -141,11 +141,25 @@ class ScanTranslationsCommand extends Command
      */
     protected function resolveTranslator(?string $option): ?object
     {
+        $configMap = config('texts.translators', []);
+
         if (! $option) {
+            // Use default_translator from config
+            $defaultTranslator = config('texts.default_translator');
+            if ($defaultTranslator) {
+                $translatorClass = $configMap[$defaultTranslator] ?? $defaultTranslator;
+                return app($translatorClass);
+            }
+
+            // If no default, get first available translator
+            if (! empty($configMap)) {
+                $firstTranslator = array_values($configMap)[0];
+                return app($firstTranslator);
+            }
+
             return null;
         }
 
-        $configMap = config('texts.translators', []);
         $translatorClass = $configMap[$option] ?? $option;
 
         return app($translatorClass);
