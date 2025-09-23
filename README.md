@@ -108,6 +108,29 @@ Use the `@text` Blade directive to fetch translations within your views.
 @text('key_name', 'default_value')
 ```
 
+### Auto-Generated Text from Keys
+
+You can also use just the key without providing a default value. The system will automatically generate readable text from the key name:
+
+```php
+// PHP usage with auto-generated text
+text('hello_mate');        // Auto-generates: "Hello Mate"
+text('welcome_back');      // Auto-generates: "Welcome Back"
+text('user.first_name');   // Auto-generates: "First Name" (uses last part after dot)
+```
+
+```blade
+{{-- Blade usage with auto-generated text --}}
+@text('hello_mate')        {{-- Auto-generates: "Hello Mate" --}}
+@text('welcome_back')      {{-- Auto-generates: "Welcome Back" --}}
+@text('pages.contact_us')  {{-- Auto-generates: "Contact Us" --}}
+```
+
+The auto-generation works by:
+- Taking the last part after dots (e.g., `pages.contact_us` → `contact_us`)
+- Replacing underscores with spaces (e.g., `contact_us` → `contact us`)
+- Capitalizing each word (e.g., `contact us` → `Contact Us`)
+
 ### Replacement Texts (Placeholders)
 
 You can include placeholders in your text strings using the `:placeholder` syntax. These placeholders will be preserved during translation and can be replaced with actual values when displaying the text.

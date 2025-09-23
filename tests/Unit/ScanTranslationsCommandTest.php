@@ -317,6 +317,69 @@ class ScanTranslationsCommandTest extends TestCase
         Http::assertNothingSent();
     }
 
+    /** @test */
+    public function it_auto_generates_text_from_single_parameter_keys()
+    {
+        // Create a blade file with single-parameter @text calls
+        File::put(resource_path('views/test.blade.php'),
+            "@text('hello_mate');\n" .
+            "@text('welcome_back');\n" .
+            "text('pages.contact_us');\n" .
+            "Text::get('user.first_name');"
+        );
+
+        Http::fake([
+            'api.openai.com/*' => Http::response([
+                'choices' => [
+                    [
+                        'message' => [
+                            'content' => json_encode([
+                                'hello_mate' => [
+                                    'en' => 'Hello Mate',
+                                    'es' => 'Hola Amigo',
+                                ],
+                                'welcome_back' => [
+                                    'en' => 'Welcome Back',
+                                    'es' => 'Bienvenido De Vuelta',
+                                ],
+                                'pages.contact_us' => [
+                                    'en' => 'Contact Us',
+                                    'es' => 'Contáctanos',
+                                ],
+                                'user.first_name' => [
+                                    'en' => 'First Name',
+                                    'es' => 'Nombre',
+                                ]
+                            ]),
+                        ],
+                    ],
+                ],
+            ]),
+        ]);
+
+        $this->artisan('laratext:scan --write --translator=openai')
+            ->expectsOutput('Scanning project for translation keys...')
+            ->expectsOutput('Found 4 unique keys.')
+            ->expectsOutput('Translation file updated: ' . lang_path('en.json'))
+            ->expectsOutput('Translation file updated: ' . lang_path('es.json'))
+            ->expectsOutput('All translations processed.')
+            ->assertExitCode(0);
+
+        $enContent = json_decode(File::get(lang_path('en.json')), true);
+        $esContent = json_decode(File::get(lang_path('es.json')), true);
+
+        // Verify auto-generated texts were used and translated
+        $this->assertEquals('Hello Mate', $enContent['hello_mate']);
+        $this->assertEquals('Welcome Back', $enContent['welcome_back']);
+        $this->assertEquals('Contact Us', $enContent['pages.contact_us']);
+        $this->assertEquals('First Name', $enContent['user.first_name']);
+
+        $this->assertEquals('Hola Amigo', $esContent['hello_mate']);
+        $this->assertEquals('Bienvenido De Vuelta', $esContent['welcome_back']);
+        $this->assertEquals('Contáctanos', $esContent['pages.contact_us']);
+        $this->assertEquals('Nombre', $esContent['user.first_name']);
+    }
+
     protected function tearDown(): void
     {
         // Clean up

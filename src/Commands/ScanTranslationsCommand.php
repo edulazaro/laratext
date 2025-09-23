@@ -66,7 +66,7 @@ class ScanTranslationsCommand extends Command
         foreach ($texts as $key => $value) {
             // Check if key is missing in any language
             foreach ($languages as $lang) {
-                if (!array_key_exists($key, $existingTranslations[$lang])) {
+                if (!array_key_exists($key, $existingTranslations[$lang] ?? [])) {
                     $missingTexts[$key] = $value;
                     continue 2;
                 }
@@ -74,8 +74,8 @@ class ScanTranslationsCommand extends Command
 
             // Check if source language value has changed (only when --resync is used)
             if ($this->option('resync') &&
-                array_key_exists($key, $existingTranslations[$defaultLanguage]) &&
-                $existingTranslations[$defaultLanguage][$key] !== $value) {
+                array_key_exists($key, $existingTranslations[$defaultLanguage] ?? []) &&
+                ($existingTranslations[$defaultLanguage][$key] ?? '') !== $value) {
                 $missingTexts[$key] = $value;
             }
         }
@@ -185,33 +185,56 @@ class ScanTranslationsCommand extends Command
         foreach ($files as $file) {
             $content = file_get_contents($file->getRealPath());
 
-            preg_match_all(
+            // First, extract two-parameter calls: text('key', 'value')
+            $patterns = [
                 "/Text::get\(\s*(['\"])(.*?)\\1\s*,\s*(['\"])((?:\\\\.|(?!\\3).)*?)\\3/s",
-                $content,
-                $matches1
-            );
-
-            preg_match_all(
                 "/@text\(\s*(['\"])(.*?)\\1\s*,\s*(['\"])((?:\\\\.|(?!\\3).)*?)\\3/s",
-                $content,
-                $matches2
-            );
+                "/(?<!->)\btext\(\s*(['\"])(.*?)\\1\s*,\s*(['\"])((?:\\\\.|(?!\\3).)*?)\\3/s"
+            ];
 
-            preg_match_all(
-                "/(?<!->)\btext\(\s*(['\"])(.*?)\\1\s*,\s*(['\"])((?:\\\\.|(?!\\3).)*?)\\3/s",
-                $content,
-                $matches3
-            );
-
-            foreach ([$matches1, $matches2, $matches3] as $match) {
-                foreach ($match[2] as $i => $key) {
-                    $value = stripcslashes($match[4][$i] ?? $key);
+            foreach ($patterns as $pattern) {
+                preg_match_all($pattern, $content, $matches);
+                foreach ($matches[2] as $i => $key) {
+                    $value = stripcslashes($matches[4][$i] ?? $key);
                     $keyValuePairs[$key] = $value;
+                }
+            }
+
+            // Then, extract single-parameter calls: text('key') - only if not already extracted
+            $singlePatterns = [
+                "/Text::get\(\s*(['\"])([^'\"\\n\\r]*?)\\1\s*\);/",
+                "/@text\(\s*(['\"])([^'\"\\n\\r]*?)\\1\s*\)/",
+                "/(?<!->)\btext\(\s*(['\"])([^'\"\\n\\r]*?)\\1\s*\);/"
+            ];
+
+            foreach ($singlePatterns as $pattern) {
+                preg_match_all($pattern, $content, $matches);
+                foreach ($matches[2] as $key) {
+                    if (!isset($keyValuePairs[$key])) {
+                        $keyValuePairs[$key] = $this->keyToText($key);
+                    }
                 }
             }
         }
 
         return $keyValuePairs;
+    }
+
+    /**
+     * Transform a key into readable text.
+     *
+     * @param  string  $key
+     * @return string
+     */
+    protected function keyToText(string $key): string
+    {
+        // Remove common prefixes and get the last part if dot-separated
+        $parts = explode('.', $key);
+        $lastPart = end($parts);
+
+        // Replace underscores with spaces and capitalize first letter of each word
+        $text = str_replace('_', ' ', $lastPart);
+        return ucwords($text);
     }
 
     /**
