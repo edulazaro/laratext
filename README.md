@@ -96,17 +96,66 @@ GOOGLE_TRANSLATOR_API_KEY=your_google_api_key
 
 Here is how you can use the blade directive and the `text` function:
 
+### Basic Usage
+
 Use the `text()` helper function to fetch translations within your PHP code.
 
 ```php
-text('key_name', 'default_value');
+// Two parameters: key and default value
+text('welcome_message', 'Welcome to our application');
+
+// Single parameter: key only (auto-generates default from key)
+text('hello'); // Will use "Hello" as default
+text('show_menu'); // Will use "Show menu" as default
+text('user_settings'); // Will use "User settings" as default
 ```
 
 Use the `@text` Blade directive to fetch translations within your views.
 
 ```php
-@text('key_name', 'default_value')
+{{-- Two parameters: key and default value --}}
+@text('welcome_message', 'Welcome to our application')
+
+{{-- Single parameter: key only (auto-generates default from key) --}}
+@text('hello') {{-- Will use "Hello" as default --}}
+@text('show_menu') {{-- Will use "Show menu" as default --}}
+@text('user_profile') {{-- Will use "User profile" as default --}}
 ```
+
+### Using Parameters with Replacements
+
+You can also pass replacement parameters for dynamic content:
+
+```php
+// PHP usage with replacements
+text('welcome_user', 'Welcome, :name!', ['name' => $user->name]);
+
+// Alternative usage
+text('items_count', 'You have :count items', ['count' => 5]);
+
+// With locale specification
+text('greeting', 'Hello :name', ['name' => 'John'], 'es');
+```
+
+```blade
+{{-- Blade usage with replacements --}}
+@text('welcome_user', 'Welcome, :name!', ['name' => $user->name])
+
+@text('order_status', 'Order #:id is :status', ['id' => $order->id, 'status' => $order->status])
+```
+
+### How Single Parameters Work
+
+When using single parameters, Laratext automatically generates default values:
+- Capitalizes the first letter
+- Replaces underscores with spaces
+- Examples:
+  - `hello` → "Hello"
+  - `show_menu` → "Show menu"
+  - `user_settings` → "User settings"
+  - `contact_info` → "Contact info"
+
+This makes your code cleaner while still providing meaningful fallback text when translations are missing.
 
 ## Scanning Translations
 
