@@ -31,13 +31,13 @@ class OpenAITranslator extends Translator implements TranslatorInterface
             'Authorization' => 'Bearer ' . $apiKey,
         ])
             ->timeout($timeout)
-            ->retry($maxRetries, 1000)
+            ->retry($maxRetries, 10)
             ->post('https://api.openai.com/v1/chat/completions', [
                 'model' => $model,
                 'messages' => [
                     [
                         'role' => 'system',
-                        'content' => "You are a helpful assistant that translates from {$from} into multiple languages: {$languagesList}. Reply with a JSON object, where each property is the language code and the value is the translated text. Preserve placeholders like :name, :count, or any text wrapped in colons (:) exactly as they are.",
+                        'content' => "You are a helpful assistant that translates from {$from} into multiple languages: {$languagesList}. Reply ONLY with a valid JSON object (no markdown, no code blocks, no explanations), where each property is the language code and the value is the translated text. Preserve placeholders like :name, :count, or any text wrapped in colons (:) exactly as they are.",
                     ],
                     [
                         'role' => 'user',
@@ -49,12 +49,6 @@ class OpenAITranslator extends Translator implements TranslatorInterface
 
         $rawContent = trim($response->json('choices.0.message.content', '{}'));
 
-        // Remove markdown code block markers if present
-        $rawContent = preg_replace('/^```json\s*/', '', $rawContent);
-        $rawContent = preg_replace('/\s*```$/', '', $rawContent);
-        $rawContent = trim($rawContent);
-
-        // Attempt to decode JSON
         $translations = json_decode($rawContent, true);
 
         if (json_last_error() !== JSON_ERROR_NONE || !is_array($translations)) {
@@ -86,37 +80,51 @@ class OpenAITranslator extends Translator implements TranslatorInterface
         $count = count($texts);
         $this->logToConsole("➡️ Sending {$count} texts to OpenAI for translation into [{$languagesList}] using model [{$model}]...");
 
-        $response = Http::withHeaders([
-            'Authorization' => 'Bearer ' . $apiKey,
-        ])
-            ->timeout($timeout)
-            ->retry($maxRetries, 1000)
-            ->post('https://api.openai.com/v1/chat/completions', [
-                'model' => $model,
-                'messages' => [
-                    [
-                        'role' => 'system',
-                        'content' => "You are a helpful assistant that translates JSON key-value pairs from {$from} into multiple languages: {$languagesList}. Reply with a JSON object where each key from the input maps to an object of translations per language. Preserve any placeholder like :name, :count, or any text wrapped in colons (:).",
+        $attempt = 0;
+        $translations = null;
+
+        while ($attempt < $maxRetries) {
+            $attempt++;
+
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $apiKey,
+            ])
+                ->timeout($timeout)
+                ->post('https://api.openai.com/v1/chat/completions', [
+                    'model' => $model,
+                    'messages' => [
+                        [
+                            'role' => 'system',
+                            'content' => "You are a helpful assistant that translates JSON key-value pairs from {$from} into multiple languages: {$languagesList}. Reply ONLY with a valid JSON object (no markdown, no code blocks, no explanations) where each key from the input maps to an object of translations per language. Preserve any placeholder like :name, :count, or any text wrapped in colons (:).",
+                        ],
+                        [
+                            'role' => 'user',
+                            'content' => $inputJson,
+                        ],
                     ],
-                    [
-                        'role' => 'user',
-                        'content' => $inputJson,
-                    ],
-                ],
-                'temperature' => 0,
-            ]);
+                    'temperature' => 0,
+                ]);
 
-        $rawContent = trim($response->json('choices.0.message.content', '{}'));
+            $rawContent = trim($response->json('choices.0.message.content', '{}'));
+            $translations = json_decode($rawContent, true);
 
-        // Remove markdown code block markers if present
-        $rawContent = preg_replace('/^```json\s*/', '', $rawContent);
-        $rawContent = preg_replace('/\s*```$/', '', $rawContent);
-        $rawContent = trim($rawContent);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($translations)) {
+                break;
+            }
 
-        $translations = json_decode($rawContent, true);
+            if ($attempt < $maxRetries) {
+                $error = json_last_error_msg();
+                $this->logToConsole("⚠️  Attempt {$attempt}: Failed to decode JSON (error: {$error}), retrying...");
+                usleep(10000); // 10ms delay
+            }
+        }
 
         if (json_last_error() !== JSON_ERROR_NONE || !is_array($translations)) {
-            throw new RuntimeException("Failed to decode batch translation response: " . $rawContent);
+            $error = json_last_error_msg();
+            $keys = implode(', ', array_keys($texts));
+            $this->logToConsole("❌ Failed to decode translation response after {$maxRetries} attempts for keys: {$keys} (JSON error: {$error})");
+            $this->logToConsole("⚠️  Skipping this batch and continuing...");
+            return [];
         }
 
         $translatedKeys = implode(', ', array_keys($translations));
