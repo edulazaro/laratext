@@ -49,6 +49,11 @@ class OpenAITranslator extends Translator implements TranslatorInterface
 
         $rawContent = trim($response->json('choices.0.message.content', '{}'));
 
+        // Remove markdown code block markers if present
+        $rawContent = preg_replace('/^```json\s*/', '', $rawContent);
+        $rawContent = preg_replace('/\s*```$/', '', $rawContent);
+        $rawContent = trim($rawContent);
+
         // Attempt to decode JSON
         $translations = json_decode($rawContent, true);
 
@@ -102,6 +107,11 @@ class OpenAITranslator extends Translator implements TranslatorInterface
             ]);
 
         $rawContent = trim($response->json('choices.0.message.content', '{}'));
+
+        // Remove markdown code block markers if present
+        $rawContent = preg_replace('/^```json\s*/', '', $rawContent);
+        $rawContent = preg_replace('/\s*```$/', '', $rawContent);
+        $rawContent = trim($rawContent);
 
         $translations = json_decode($rawContent, true);
 
