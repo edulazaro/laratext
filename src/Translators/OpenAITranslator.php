@@ -37,7 +37,7 @@ class OpenAITranslator extends Translator implements TranslatorInterface
                 'messages' => [
                     [
                         'role' => 'system',
-                        'content' => "You are a helpful assistant that translates from {$from} into multiple languages: {$languagesList}. Reply ONLY with a valid JSON object (no markdown, no code blocks, no explanations), where each property is the language code and the value is the translated text. Preserve placeholders like :name, :count, or any text wrapped in colons (:) exactly as they are.",
+                        'content' => "You are a helpful assistant that translates from {$from} into multiple languages: {$languagesList}. Reply ONLY with a valid JSON object (no markdown, no code blocks, no explanations), where each property is the language code and the value is the translated text. Preserve placeholders like :name, :count, or any text wrapped in colons (:) exactly as they are. IMPORTANT: Do NOT create nested objects. Return a flat JSON object.",
                     ],
                     [
                         'role' => 'user',
@@ -54,6 +54,9 @@ class OpenAITranslator extends Translator implements TranslatorInterface
         if (json_last_error() !== JSON_ERROR_NONE || !is_array($translations)) {
             throw new RuntimeException("Failed to decode translation response: " . $rawContent);
         }
+
+        // Flatten any nested structures that OpenAI might have created
+        $translations = $this->flattenArray($translations);
 
         return $translations;
     }
@@ -95,7 +98,7 @@ class OpenAITranslator extends Translator implements TranslatorInterface
                     'messages' => [
                         [
                             'role' => 'system',
-                            'content' => "You are a helpful assistant that translates JSON key-value pairs from {$from} into multiple languages: {$languagesList}. Reply ONLY with a valid JSON object (no markdown, no code blocks, no explanations) where each key from the input maps to an object of translations per language. Preserve any placeholder like :name, :count, or any text wrapped in colons (:).",
+                            'content' => "You are a helpful assistant that translates JSON key-value pairs from {$from} into multiple languages: {$languagesList}. Reply ONLY with a valid JSON object (no markdown, no code blocks, no explanations) where each key from the input maps to an object of translations per language. Preserve any placeholder like :name, :count, or any text wrapped in colons (:). CRITICAL: Keep ALL keys EXACTLY as they appear in the input, including dots and numbers (e.g., 'properties.parking_type', 'items.0.name'). Do NOT interpret dots as nested objects. Do NOT create any nested structure. Return keys as-is.",
                         ],
                         [
                             'role' => 'user',
@@ -109,6 +112,8 @@ class OpenAITranslator extends Translator implements TranslatorInterface
             $translations = json_decode($rawContent, true);
 
             if (json_last_error() === JSON_ERROR_NONE && is_array($translations)) {
+                // Flatten any nested structures that OpenAI might have created
+                $translations = $this->flattenArray($translations);
                 break;
             }
 
@@ -131,5 +136,56 @@ class OpenAITranslator extends Translator implements TranslatorInterface
         $this->logToConsole("✅ Received translations for: {$translatedKeys}");
 
         return $translations;
+    }
+
+    /**
+     * Flatten a nested array structure back into dot notation.
+     * This handles cases where OpenAI incorrectly interprets dots as nested objects.
+     *
+     * Example:
+     * Input:  ["properties" => ["parking_type" => ["es" => "Garaje"]]]
+     * Output: ["properties.parking_type" => ["es" => "Garaje"]]
+     *
+     * @param array $array The array to flatten
+     * @param string $prepend The prefix for keys (used in recursion)
+     * @param bool $isTopLevel Whether this is the top level (to skip pure numeric keys)
+     * @return array Flattened array with dot notation keys
+     */
+    protected function flattenArray(array $array, string $prepend = '', bool $isTopLevel = true): array
+    {
+        $results = [];
+
+        foreach ($array as $key => $value) {
+            // Skip ONLY pure numeric keys at the top level (these are invalid translation keys like "0": "text")
+            // But preserve numeric keys in paths like "items.0.description"
+            if ($isTopLevel && is_numeric($key) && $prepend === '') {
+                continue;
+            }
+
+            // Build the new key with dot notation
+            $newKey = $prepend !== '' ? "{$prepend}.{$key}" : $key;
+
+            if (is_array($value) && !empty($value)) {
+                // Check if this array contains language codes (es, en, zh, etc.)
+                // If so, this is a translation object and we should NOT flatten it
+                $allKeysAreLangCodes = !empty($value) && count(array_filter(array_keys($value), function($k) {
+                    return is_string($k) && strlen($k) === 2 && ctype_alpha($k);
+                })) === count($value);
+
+                if ($allKeysAreLangCodes) {
+                    // This is a translation object like {"es": "Garaje", "zh": "车库"}
+                    // Don't flatten it, keep it as is
+                    $results[$newKey] = $value;
+                } else {
+                    // This is a nested structure that needs flattening
+                    $results = array_merge($results, $this->flattenArray($value, $newKey, false));
+                }
+            } else {
+                // Leaf value - add it
+                $results[$newKey] = $value;
+            }
+        }
+
+        return $results;
     }
 }
