@@ -8,7 +8,7 @@ class Text
     {
         $translation = __($key, $replace, $locale);
 
-        if ($translation === $key) {
+        if ($translation === $key || is_array($translation)) {
             $translation = $default ?? $key;
 
             foreach ($replace as $search => $value) {
