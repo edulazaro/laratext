@@ -32,13 +32,22 @@ abstract class TestCase extends BaseTestCase
             'default_translator' => \EduLazaro\Laratext\Translators\OpenAITranslator::class,
             'translators' => [
                 'openai' => \EduLazaro\Laratext\Translators\OpenAITranslator::class,
+                'claude' => \EduLazaro\Laratext\Translators\ClaudeTranslator::class,
                 'google' => \EduLazaro\Laratext\Translators\GoogleTranslator::class,
             ],
             'openai' => [
                 'api_key' => env('OPENAI_API_KEY', 'fake-openai-api-key'),
-                'model' => env('OPENAI_MODEL', 'gpt-3.5-turbo'),
+                'model' => env('OPENAI_MODEL', 'gpt-5.4-nano'),
                 'timeout' => 10,
                 'retries' => 3,
+            ],
+
+            'claude' => [
+                'api_key' => env('ANTHROPIC_API_KEY', 'fake-anthropic-api-key'),
+                'model' => env('ANTHROPIC_MODEL', 'claude-haiku-4-5'),
+                'timeout' => 10,
+                'retries' => 3,
+                'max_tokens' => 4096,
             ],
 
             'google' => [

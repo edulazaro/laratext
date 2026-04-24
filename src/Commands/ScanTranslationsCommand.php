@@ -16,7 +16,9 @@ class ScanTranslationsCommand extends Command
                             {--lang= : Target specific language}
                             {--dry : Dry run, do not write}
                             {--diff : Show diff of changes}
-                            {--resync : Retranslate texts when source language values have changed}
+                            {--resync : Retranslate every key from scratch, ignoring existing translations}
+                            {--only-missing : Only translate brand-new keys; skip keys whose source text has drifted}
+                            {--prune : Remove keys present in lang files but no longer found in code}
                             {--translator= : Translator service to use (optional)}';
 
     protected $description = 'Scan project files and update translation files with missing keys.';
@@ -61,10 +63,21 @@ class ScanTranslationsCommand extends Command
                 : [];
         }
 
-        // Determine missing keys per language
+        // Determine which keys need translating.
+        //   --resync       → everything, from scratch
+        //   --only-missing → brand-new keys only, skip drifted keys (warn about them)
+        //   default        → new keys + drifted keys
         $missingTexts = [];
+        $staleTexts = [];
+        $skippedStale = [];
+
         foreach ($texts as $key => $value) {
-            // Check if key is missing in any language
+            if ($this->option('resync')) {
+                $missingTexts[$key] = $value;
+                continue;
+            }
+
+            // Missing in any language → new key, must translate
             foreach ($languages as $lang) {
                 if (!array_key_exists($key, $existingTranslations[$lang] ?? [])) {
                     $missingTexts[$key] = $value;
@@ -72,35 +85,97 @@ class ScanTranslationsCommand extends Command
                 }
             }
 
-            // Check if source language value has changed (only when --resync is used)
-            if ($this->option('resync') &&
-                array_key_exists($key, $existingTranslations[$defaultLanguage] ?? []) &&
-                ($existingTranslations[$defaultLanguage][$key] ?? '') !== $value) {
-                $missingTexts[$key] = $value;
+            // Exists everywhere; check if source changed
+            $sourceOnDisk = $existingTranslations[$defaultLanguage][$key] ?? null;
+            if ($sourceOnDisk !== null && $sourceOnDisk !== $value) {
+                $staleTexts[$key] = ['old' => $sourceOnDisk, 'new' => $value];
+
+                if ($this->option('only-missing')) {
+                    $skippedStale[$key] = $staleTexts[$key];
+                } else {
+                    $missingTexts[$key] = $value;
+                }
             }
         }
 
-        if (empty($missingTexts)) {
+        // Report drifted keys that won't be retranslated this run (--only-missing).
+        if (!empty($skippedStale)) {
+            $count = count($skippedStale);
+            $targetLangs = implode(', ', array_diff($languages, [$defaultLanguage]));
+            $this->warn("⚠️  {$count} key(s) have an updated source text but stale translations in {$targetLangs}:");
+            foreach ($skippedStale as $key => $diff) {
+                $this->line("   • {$key}");
+                $this->line("       old: \"{$diff['old']}\"");
+                $this->line("       new: \"{$diff['new']}\"");
+            }
+            $this->info('Drop --only-missing to retranslate them, or edit the JSON files manually.');
+        } elseif (!empty($staleTexts)) {
+            // Default path: announce what is about to be retranslated due to source drift.
+            $count = count($staleTexts);
+            $this->info("ℹ️  {$count} key(s) will be retranslated because their source text changed:");
+            foreach ($staleTexts as $key => $diff) {
+                $this->line("   • {$key}");
+                $this->line("       old: \"{$diff['old']}\"");
+                $this->line("       new: \"{$diff['new']}\"");
+            }
+        }
+
+        // Detect orphan keys present in lang files but no longer referenced in code
+        $existingKeys = [];
+        foreach ($existingTranslations as $langKeys) {
+            $existingKeys = array_merge($existingKeys, array_keys($langKeys ?? []));
+        }
+        $existingKeys = array_unique($existingKeys);
+        $orphanKeys = array_values(array_diff($existingKeys, array_keys($texts)));
+
+        $pruneWillWrite = false;
+        if (!empty($orphanKeys)) {
+            $this->warn('🧹 ' . count($orphanKeys) . ' key(s) found in lang files but no longer in code:');
+            foreach ($orphanKeys as $key) {
+                $this->line("   • {$key}");
+            }
+
+            if ($this->option('prune')) {
+                if (!$this->option('write')) {
+                    $this->info('Run with --write to actually remove them.');
+                } else {
+                    foreach ($languages as $lang) {
+                        $existingTranslations[$lang] = array_diff_key(
+                            $existingTranslations[$lang] ?? [],
+                            array_flip($orphanKeys)
+                        );
+                    }
+                    $pruneWillWrite = true;
+                    $this->info('Pruned ' . count($orphanKeys) . ' orphan key(s). They will be removed when files are written below.');
+                }
+            } else {
+                $this->info('Run with --prune --write to remove them.');
+            }
+        }
+
+        if (empty($missingTexts) && !$pruneWillWrite) {
             $this->info("No new keys to translate.");
             return;
         }
 
         $translations = [];
 
-        if ($translator && method_exists($translator, 'batchTranslate')) {
-            $translations = $translator->batchTranslate($missingTexts, $defaultLanguage, $languages);
-        } elseif ($translator && method_exists($translator, 'translateMany')) {
-            $translations = $translator->translateMany($missingTexts, $defaultLanguage, $languages);
-        } elseif ($translator) {
-            foreach ($missingTexts as $key => $value) {
-                $results = $translator->translate($value, $defaultLanguage, $languages);
-                $translations[$key] = $results;
-            }
-        } else {
-            foreach ($missingTexts as $key => $value) {
-                $translations[$key] = [];
-                foreach ($languages as $lang) {
-                    $translations[$key][$lang] = $value;
+        if (!empty($missingTexts)) {
+            if ($translator && method_exists($translator, 'batchTranslate')) {
+                $translations = $translator->batchTranslate($missingTexts, $defaultLanguage, $languages);
+            } elseif ($translator && method_exists($translator, 'translateMany')) {
+                $translations = $translator->translateMany($missingTexts, $defaultLanguage, $languages);
+            } elseif ($translator) {
+                foreach ($missingTexts as $key => $value) {
+                    $results = $translator->translate($value, $defaultLanguage, $languages);
+                    $translations[$key] = $results;
+                }
+            } else {
+                foreach ($missingTexts as $key => $value) {
+                    $translations[$key] = [];
+                    foreach ($languages as $lang) {
+                        $translations[$key][$lang] = $value;
+                    }
                 }
             }
         }

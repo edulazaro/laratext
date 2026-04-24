@@ -18,6 +18,7 @@ class ScanTranslationsCommandTest extends TestCase
         // Cleanup old test files
         File::delete(lang_path('en.json'));
         File::delete(lang_path('es.json'));
+        File::delete(lang_path('fr.json'));
 
         // Create a dummy blade file to scan
         File::put(resource_path('views/test.blade.php'), "@text('pages.home.welcome', 'Welcome')");
@@ -140,7 +141,7 @@ class ScanTranslationsCommandTest extends TestCase
     }
 
     /** @test */
-    public function it_retranslates_when_source_value_changes()
+    public function it_retranslates_drifted_keys_by_default()
     {
         // First, create existing translation files with initial translations
         File::put(lang_path('en.json'), json_encode([
@@ -150,6 +151,10 @@ class ScanTranslationsCommandTest extends TestCase
         File::put(lang_path('es.json'), json_encode([
             'pages.home.welcome' => 'Bienvenido',
             'pages.about.title' => 'Acerca de nosotros'
+        ]));
+        File::put(lang_path('fr.json'), json_encode([
+            'pages.home.welcome' => 'Bienvenue',
+            'pages.about.title' => 'À propos'
         ]));
 
         // Update the blade file with one changed value and one unchanged
@@ -167,6 +172,7 @@ class ScanTranslationsCommandTest extends TestCase
                                 'pages.home.welcome' => [
                                     'en' => 'Welcome to our site',
                                     'es' => 'Bienvenido a nuestro sitio',
+                                    'fr' => 'Bienvenue sur notre site',
                                 ]
                             ]),
                         ],
@@ -175,7 +181,7 @@ class ScanTranslationsCommandTest extends TestCase
             ]),
         ]);
 
-        $this->artisan('laratext:scan --write --resync --translator=openai')
+        $this->artisan('laratext:scan --write --translator=openai')
             ->expectsOutput('Scanning project for translation keys...')
             ->expectsOutput('Found 2 unique keys.')
             ->expectsOutput('Translation file updated: ' . lang_path('en.json'))
@@ -207,6 +213,10 @@ class ScanTranslationsCommandTest extends TestCase
             'pages.home.welcome' => 'Bienvenido',
             'pages.about.title' => 'Acerca de nosotros'
         ]));
+        File::put(lang_path('fr.json'), json_encode([
+            'pages.home.welcome' => 'Bienvenue',
+            'pages.about.title' => 'À propos'
+        ]));
 
         // Create blade file with changed values
         File::put(resource_path('views/test.blade.php'),
@@ -223,10 +233,12 @@ class ScanTranslationsCommandTest extends TestCase
                                 'pages.home.welcome' => [
                                     'en' => 'Welcome to our amazing site',
                                     'es' => 'Bienvenido a nuestro increíble sitio',
+                                    'fr' => 'Bienvenue sur notre super site',
                                 ],
                                 'pages.about.title' => [
                                     'en' => 'About Our Company',
                                     'es' => 'Acerca de nuestra empresa',
+                                    'fr' => 'À propos de notre entreprise',
                                 ]
                             ]),
                         ],
@@ -235,7 +247,7 @@ class ScanTranslationsCommandTest extends TestCase
             ]),
         ]);
 
-        $this->artisan('laratext:scan --write --resync --translator=openai')
+        $this->artisan('laratext:scan --write --translator=openai')
             ->expectsOutput('Scanning project for translation keys...')
             ->expectsOutput('Found 2 unique keys.')
             ->assertExitCode(0);
@@ -262,6 +274,10 @@ class ScanTranslationsCommandTest extends TestCase
             'pages.home.welcome' => 'Bienvenido',
             'pages.about.title' => 'Acerca de nosotros'
         ]));
+        File::put(lang_path('fr.json'), json_encode([
+            'pages.home.welcome' => 'Bienvenue',
+            'pages.about.title' => 'À propos'
+        ]));
 
         // Create blade file with same values (no changes)
         File::put(resource_path('views/test.blade.php'),
@@ -279,7 +295,7 @@ class ScanTranslationsCommandTest extends TestCase
     }
 
     /** @test */
-    public function it_does_not_retranslate_changed_values_when_resync_is_disabled()
+    public function it_does_not_retranslate_changed_values_when_only_missing_is_enabled()
     {
         // Create existing translation files with initial translations
         File::put(lang_path('en.json'), json_encode([
@@ -290,6 +306,10 @@ class ScanTranslationsCommandTest extends TestCase
             'pages.home.welcome' => 'Bienvenido',
             'pages.about.title' => 'Acerca de nosotros'
         ]));
+        File::put(lang_path('fr.json'), json_encode([
+            'pages.home.welcome' => 'Bienvenue',
+            'pages.about.title' => 'À propos'
+        ]));
 
         // Update the blade file with changed values
         File::put(resource_path('views/test.blade.php'),
@@ -297,10 +317,11 @@ class ScanTranslationsCommandTest extends TestCase
             "@text('pages.about.title', 'About Our Company')"
         );
 
-        // Run without --resync flag
-        $this->artisan('laratext:scan --write --translator=openai')
+        // Run with --only-missing: drift is detected and warned, but NOT retranslated
+        $this->artisan('laratext:scan --write --only-missing --translator=openai')
             ->expectsOutput('Scanning project for translation keys...')
             ->expectsOutput('Found 2 unique keys.')
+            ->expectsOutputToContain('key(s) have an updated source text')
             ->expectsOutput('No new keys to translate.')
             ->assertExitCode(0);
 
@@ -380,12 +401,330 @@ class ScanTranslationsCommandTest extends TestCase
         $this->assertEquals('Nombre', $esContent['user.first_name']);
     }
 
+    /** @test */
+    public function it_warns_about_stale_source_text_without_calling_translator_when_only_missing()
+    {
+        File::put(lang_path('en.json'), json_encode([
+            'pages.home.welcome' => 'Welcome',
+        ]));
+        File::put(lang_path('es.json'), json_encode([
+            'pages.home.welcome' => 'Bienvenido',
+        ]));
+        File::put(lang_path('fr.json'), json_encode([
+            'pages.home.welcome' => 'Bienvenue',
+        ]));
+
+        File::put(resource_path('views/test.blade.php'),
+            "@text('pages.home.welcome', 'Welcome to our site')"
+        );
+
+        Http::fake();
+
+        $this->artisan('laratext:scan --write --only-missing --translator=openai')
+            ->expectsOutputToContain('key(s) have an updated source text')
+            ->expectsOutputToContain('pages.home.welcome')
+            ->expectsOutputToContain('old: "Welcome"')
+            ->expectsOutputToContain('new: "Welcome to our site"')
+            ->expectsOutput('No new keys to translate.')
+            ->assertExitCode(0);
+
+        Http::assertNothingSent();
+
+        $enContent = json_decode(File::get(lang_path('en.json')), true);
+        $esContent = json_decode(File::get(lang_path('es.json')), true);
+
+        $this->assertEquals('Welcome', $enContent['pages.home.welcome']);
+        $this->assertEquals('Bienvenido', $esContent['pages.home.welcome']);
+    }
+
+    /** @test */
+    public function it_resync_retranslates_every_key_from_scratch()
+    {
+        File::put(lang_path('en.json'), json_encode([
+            'pages.home.welcome' => 'Welcome',
+            'pages.about.title' => 'About Us',
+        ]));
+        File::put(lang_path('es.json'), json_encode([
+            'pages.home.welcome' => 'Bienvenido',
+            'pages.about.title' => 'Acerca de nosotros',
+        ]));
+        File::put(lang_path('fr.json'), json_encode([
+            'pages.home.welcome' => 'Bienvenue',
+            'pages.about.title' => 'À propos',
+        ]));
+
+        // No drift in code; source values match what is on disk.
+        File::put(resource_path('views/test.blade.php'),
+            "@text('pages.home.welcome', 'Welcome')\n" .
+            "@text('pages.about.title', 'About Us')"
+        );
+
+        Http::fake([
+            'api.openai.com/*' => Http::response([
+                'choices' => [
+                    [
+                        'message' => [
+                            'content' => json_encode([
+                                'pages.home.welcome' => [
+                                    'en' => 'Welcome',
+                                    'es' => 'Te damos la bienvenida',
+                                    'fr' => 'Soyez le bienvenu',
+                                ],
+                                'pages.about.title' => [
+                                    'en' => 'About Us',
+                                    'es' => 'Sobre nosotros',
+                                    'fr' => 'À notre sujet',
+                                ],
+                            ]),
+                        ],
+                    ],
+                ],
+            ]),
+        ]);
+
+        // --resync must retranslate every key, even keys that are in sync on disk.
+        $this->artisan('laratext:scan --write --resync --translator=openai')
+            ->assertExitCode(0);
+
+        $esContent = json_decode(File::get(lang_path('es.json')), true);
+        $frContent = json_decode(File::get(lang_path('fr.json')), true);
+
+        $this->assertEquals('Te damos la bienvenida', $esContent['pages.home.welcome']);
+        $this->assertEquals('Sobre nosotros', $esContent['pages.about.title']);
+        $this->assertEquals('Soyez le bienvenu', $frContent['pages.home.welcome']);
+        $this->assertEquals('À notre sujet', $frContent['pages.about.title']);
+    }
+
+    /** @test */
+    public function it_reports_no_changes_when_all_keys_are_in_sync()
+    {
+        File::put(lang_path('en.json'), json_encode([
+            'pages.home.welcome' => 'Welcome',
+        ]));
+        File::put(lang_path('es.json'), json_encode([
+            'pages.home.welcome' => 'Bienvenido',
+        ]));
+        File::put(lang_path('fr.json'), json_encode([
+            'pages.home.welcome' => 'Bienvenue',
+        ]));
+
+        File::put(resource_path('views/test.blade.php'),
+            "@text('pages.home.welcome', 'Welcome')"
+        );
+
+        Http::fake();
+
+        $this->artisan('laratext:scan --write --translator=openai')
+            ->expectsOutput('No new keys to translate.')
+            ->assertExitCode(0);
+
+        Http::assertNothingSent();
+    }
+
+    /** @test */
+    public function it_warns_about_orphan_keys_without_prune()
+    {
+        File::put(lang_path('en.json'), json_encode([
+            'pages.home.welcome' => 'Welcome',
+            'pages.legacy.removed' => 'Old Text',
+        ]));
+        File::put(lang_path('es.json'), json_encode([
+            'pages.home.welcome' => 'Bienvenido',
+            'pages.legacy.removed' => 'Texto viejo',
+        ]));
+        File::put(lang_path('fr.json'), json_encode([
+            'pages.home.welcome' => 'Bienvenue',
+            'pages.legacy.removed' => 'Ancien texte',
+        ]));
+
+        File::put(resource_path('views/test.blade.php'),
+            "@text('pages.home.welcome', 'Welcome')"
+        );
+
+        $this->artisan('laratext:scan --write --translator=openai')
+            ->expectsOutputToContain('key(s) found in lang files but no longer in code')
+            ->expectsOutputToContain('pages.legacy.removed')
+            ->expectsOutputToContain('Run with --prune --write to remove them')
+            ->assertExitCode(0);
+
+        $enContent = json_decode(File::get(lang_path('en.json')), true);
+        $esContent = json_decode(File::get(lang_path('es.json')), true);
+
+        $this->assertArrayHasKey('pages.legacy.removed', $enContent);
+        $this->assertArrayHasKey('pages.legacy.removed', $esContent);
+    }
+
+    /** @test */
+    public function it_lists_orphans_with_prune_but_does_not_remove_without_write()
+    {
+        File::put(lang_path('en.json'), json_encode([
+            'pages.home.welcome' => 'Welcome',
+            'pages.legacy.removed' => 'Old Text',
+        ]));
+        File::put(lang_path('es.json'), json_encode([
+            'pages.home.welcome' => 'Bienvenido',
+            'pages.legacy.removed' => 'Texto viejo',
+        ]));
+        File::put(lang_path('fr.json'), json_encode([
+            'pages.home.welcome' => 'Bienvenue',
+            'pages.legacy.removed' => 'Ancien texte',
+        ]));
+
+        File::put(resource_path('views/test.blade.php'),
+            "@text('pages.home.welcome', 'Welcome')"
+        );
+
+        $this->artisan('laratext:scan --prune --translator=openai')
+            ->expectsOutputToContain('pages.legacy.removed')
+            ->expectsOutputToContain('Run with --write to actually remove them')
+            ->assertExitCode(0);
+
+        $enContent = json_decode(File::get(lang_path('en.json')), true);
+        $esContent = json_decode(File::get(lang_path('es.json')), true);
+
+        $this->assertArrayHasKey('pages.legacy.removed', $enContent);
+        $this->assertArrayHasKey('pages.legacy.removed', $esContent);
+    }
+
+    /** @test */
+    public function it_removes_orphans_from_all_lang_files_with_prune_and_write()
+    {
+        File::put(lang_path('en.json'), json_encode([
+            'pages.home.welcome' => 'Welcome',
+            'pages.legacy.removed' => 'Old Text',
+        ]));
+        File::put(lang_path('es.json'), json_encode([
+            'pages.home.welcome' => 'Bienvenido',
+            'pages.legacy.removed' => 'Texto viejo',
+        ]));
+        File::put(lang_path('fr.json'), json_encode([
+            'pages.home.welcome' => 'Bienvenue',
+            'pages.legacy.removed' => 'Ancien texte',
+        ]));
+
+        File::put(resource_path('views/test.blade.php'),
+            "@text('pages.home.welcome', 'Welcome')"
+        );
+
+        Http::fake();
+
+        $this->artisan('laratext:scan --write --prune --translator=openai')
+            ->expectsOutputToContain('Pruned 1 orphan key(s)')
+            ->assertExitCode(0);
+
+        $enContent = json_decode(File::get(lang_path('en.json')), true);
+        $esContent = json_decode(File::get(lang_path('es.json')), true);
+        $frContent = json_decode(File::get(lang_path('fr.json')), true);
+
+        $this->assertArrayNotHasKey('pages.legacy.removed', $enContent);
+        $this->assertArrayNotHasKey('pages.legacy.removed', $esContent);
+        $this->assertArrayNotHasKey('pages.legacy.removed', $frContent);
+        $this->assertArrayHasKey('pages.home.welcome', $enContent);
+        $this->assertArrayHasKey('pages.home.welcome', $esContent);
+        $this->assertArrayHasKey('pages.home.welcome', $frContent);
+
+        Http::assertNothingSent();
+    }
+
+    /** @test */
+    public function it_handles_new_stale_and_orphan_keys_in_a_single_run()
+    {
+        File::put(lang_path('en.json'), json_encode([
+            'pages.home.welcome' => 'Welcome',
+            'pages.legacy.removed' => 'Old Text',
+        ]));
+        File::put(lang_path('es.json'), json_encode([
+            'pages.home.welcome' => 'Bienvenido',
+            'pages.legacy.removed' => 'Texto viejo',
+        ]));
+        File::put(lang_path('fr.json'), json_encode([
+            'pages.home.welcome' => 'Bienvenue',
+            'pages.legacy.removed' => 'Ancien texte',
+        ]));
+
+        File::put(resource_path('views/test.blade.php'),
+            "@text('pages.home.welcome', 'Welcome to our site')\n" .
+            "@text('pages.contact.title', 'Contact')"
+        );
+
+        Http::fake([
+            'api.openai.com/*' => Http::response([
+                'choices' => [
+                    [
+                        'message' => [
+                            'content' => json_encode([
+                                'pages.home.welcome' => [
+                                    'en' => 'Welcome to our site',
+                                    'es' => 'Bienvenido a nuestro sitio',
+                                    'fr' => 'Bienvenue sur notre site',
+                                ],
+                                'pages.contact.title' => [
+                                    'en' => 'Contact',
+                                    'es' => 'Contacto',
+                                    'fr' => 'Contact',
+                                ],
+                            ]),
+                        ],
+                    ],
+                ],
+            ]),
+        ]);
+
+        $this->artisan('laratext:scan --write --prune --translator=openai')
+            ->assertExitCode(0);
+
+        $enContent = json_decode(File::get(lang_path('en.json')), true);
+        $esContent = json_decode(File::get(lang_path('es.json')), true);
+        $frContent = json_decode(File::get(lang_path('fr.json')), true);
+
+        $this->assertEquals('Welcome to our site', $enContent['pages.home.welcome']);
+        $this->assertEquals('Bienvenido a nuestro sitio', $esContent['pages.home.welcome']);
+        $this->assertEquals('Bienvenue sur notre site', $frContent['pages.home.welcome']);
+        $this->assertEquals('Contact', $enContent['pages.contact.title']);
+        $this->assertEquals('Contacto', $esContent['pages.contact.title']);
+        $this->assertArrayNotHasKey('pages.legacy.removed', $enContent);
+        $this->assertArrayNotHasKey('pages.legacy.removed', $esContent);
+        $this->assertArrayNotHasKey('pages.legacy.removed', $frContent);
+    }
+
+    /** @test */
+    public function it_does_not_prune_keys_still_referenced_via_single_argument_form()
+    {
+        File::put(lang_path('en.json'), json_encode([
+            'hello_mate' => 'Hello Mate',
+        ]));
+        File::put(lang_path('es.json'), json_encode([
+            'hello_mate' => 'Hola Amigo',
+        ]));
+        File::put(lang_path('fr.json'), json_encode([
+            'hello_mate' => 'Salut Mon Pote',
+        ]));
+
+        File::put(resource_path('views/test.blade.php'),
+            "@text('hello_mate');"
+        );
+
+        Http::fake();
+
+        $this->artisan('laratext:scan --write --prune --translator=openai')
+            ->assertExitCode(0);
+
+        $enContent = json_decode(File::get(lang_path('en.json')), true);
+        $esContent = json_decode(File::get(lang_path('es.json')), true);
+        $frContent = json_decode(File::get(lang_path('fr.json')), true);
+
+        $this->assertArrayHasKey('hello_mate', $enContent);
+        $this->assertArrayHasKey('hello_mate', $esContent);
+        $this->assertArrayHasKey('hello_mate', $frContent);
+    }
+
     protected function tearDown(): void
     {
         // Clean up
         File::delete(resource_path('views/test.blade.php'));
         File::delete(lang_path('en.json'));
         File::delete(lang_path('es.json'));
+        File::delete(lang_path('fr.json'));
 
         parent::tearDown();
     }

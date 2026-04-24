@@ -56,15 +56,25 @@ return [
     // Translator Services
     'translators' => [
         'openai' => EduLazaro\Laratext\Translators\OpenAITranslator::class,
+        'claude' => EduLazaro\Laratext\Translators\ClaudeTranslator::class,
         'google' => EduLazaro\Laratext\Translators\GoogleTranslator::class,
     ],
 
     // OpenAI Configuration
     'openai' => [
         'api_key' => env('OPENAI_API_KEY'),
-        'model' => env('OPENAI_MODEL', 'gpt-3.5-turbo'),
+        'model' => env('OPENAI_MODEL', 'gpt-5.4-nano'),
         'timeout' => 60,
         'retries' => 3,
+    ],
+
+    // Claude (Anthropic) Configuration
+    'claude' => [
+        'api_key' => env('ANTHROPIC_API_KEY'),
+        'model' => env('ANTHROPIC_MODEL', 'claude-haiku-4-5'),
+        'timeout' => 60,
+        'retries' => 3,
+        'max_tokens' => 4096,
     ],
 
     // Google Translator Configuration
@@ -89,8 +99,17 @@ This is an example of the `.env`:
 
 ```
 OPENAI_API_KEY=your_openai_api_key
+ANTHROPIC_API_KEY=your_anthropic_api_key
 GOOGLE_TRANSLATOR_API_KEY=your_google_api_key
 ```
+
+To use Claude as the translator for a scan run, pass `--translator=claude`:
+
+```bash
+php artisan laratext:scan --write --translator=claude
+```
+
+You can also set it as the project default by changing `default_translator` in `config/texts.php` or via the `default_translator` config entry. The Claude translator uses the [Messages API](https://docs.anthropic.com/en/api/messages) with prompt caching enabled on the system prompt, so repeated batches in a single scan reuse the cached instructions automatically.
 
 ## Usage
 
@@ -188,18 +207,62 @@ These are the command Options:
 * `--lang`: Target a specific language for translation (e.g., es for Spanish).
 * `--dry` Perform a dry run (do not write).
 * `--diff`: Show the diff of the changes made.
-* `--resync`: Retranslate texts when source language values have changed.
+* `--resync`: Retranslate **every** key from scratch, ignoring existing translations (use after changing translator or model).
+* `--only-missing`: Only translate brand-new keys; skip keys whose source text has drifted (they are listed as warnings instead).
+* `--prune`: Remove keys present in lang files but no longer referenced in code.
 * `--translator`: Specify the translator service to use (e.g., openai or google).
 
-### Resyncing Changed Translations
+### Keeping Translations In Sync
 
-By default, the scan command only processes missing translation keys. If you've updated the source text for an existing key, use the `--resync` option to retranslate all languages when source values have changed:
+By default, `laratext:scan --write` translates:
+
+1. **New keys** — keys in code that don't exist yet in the lang files.
+2. **Drifted keys** — keys whose source text in code no longer matches the value stored in `lang/{defaultLocale}.json`. These are retranslated in every target language so translations stay aligned with the source.
+
+```bash
+php artisan laratext:scan --write
+# ℹ️  1 key(s) will be retranslated because their source text changed:
+#    • pages.home.welcome
+#        old: "Welcome"
+#        new: "Welcome to our site"
+# ... (translator called, JSONs updated)
+```
+
+#### Skipping drift: `--only-missing`
+
+If you want the conservative behaviour — translate only new keys, leave drifted keys untouched — pass `--only-missing`. Drift is still detected and printed as a warning, but no API calls are made for drifted keys:
+
+```bash
+php artisan laratext:scan --write --only-missing
+# ⚠️  1 key(s) have an updated source text but stale translations in es, fr:
+#    • pages.home.welcome
+#        old: "Welcome"
+#        new: "Welcome to our site"
+# Drop --only-missing to retranslate them, or edit the JSON files manually.
+```
+
+#### Forcing a full retranslation: `--resync`
+
+`--resync` retranslates **every** key in your codebase from scratch, even keys whose source text has not changed. Useful when you've switched translator providers, upgraded the OpenAI model, or want to regenerate inconsistent translations left over from older runs. Expect this to be expensive in tokens.
 
 ```bash
 php artisan laratext:scan --write --resync
 ```
 
-This is useful when you've modified existing text in your code and want to update all translations to reflect the changes. Without `--resync`, only missing keys are translated, but existing keys with changed source values are left unchanged.
+#### Cleaning up orphan keys: `--prune`
+
+`--prune` detects the opposite drift: keys that still live in `lang/{locale}.json` but are no longer referenced anywhere in code (removed `text()` / `@text` calls). By default it only lists them; combined with `--write` it removes them from every configured language file:
+
+```bash
+php artisan laratext:scan --prune              # list orphan keys only
+php artisan laratext:scan --write --prune      # actually delete orphan keys
+```
+
+#### Recommended cadence
+
+* **During development**: run `php artisan laratext:scan --write` after adding or editing `@text` / `text()` calls. New keys get translated; edited source texts get retranslated automatically.
+* **Periodically (weekly / pre-release / CI)**: run `php artisan laratext:scan --write --prune` to also drop orphan keys left behind by refactors.
+* **After switching model or translator**: run `php artisan laratext:scan --write --resync` once to regenerate every translation against the new backend.
 
 
 ## Creating translators

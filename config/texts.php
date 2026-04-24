@@ -4,6 +4,7 @@ return [
 
     'translators' => [
         'openai' => EduLazaro\Laratext\Translators\OpenAITranslator::class,
+        'claude' => EduLazaro\Laratext\Translators\ClaudeTranslator::class,
         'google' => EduLazaro\Laratext\Translators\GoogleTranslator::class,
     ],
 
@@ -32,9 +33,28 @@ return [
 
     'openai' => [
         'api_key' => env('OPENAI_API_KEY'),
-        'model' => env('OPENAI_MODEL', 'gpt-3.5-turbo'),
+        'model' => env('OPENAI_MODEL', 'gpt-5.4-nano'),
         'timeout' => 60,
         'retries' => 3,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Claude (Anthropic) Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Configure the Claude translator. The system prompt is automatically
+    | marked with cache_control: ephemeral, so repeated batches in a single
+    | scan run benefit from prompt caching at no extra cost.
+    |
+    */
+
+    'claude' => [
+        'api_key' => env('ANTHROPIC_API_KEY'),
+        'model' => env('ANTHROPIC_MODEL', 'claude-haiku-4-5'),
+        'timeout' => 60,
+        'retries' => 3,
+        'max_tokens' => 4096,
     ],
 
     /*

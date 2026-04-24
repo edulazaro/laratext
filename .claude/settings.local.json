@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(vendor/bin/phpunit:*)",
-      "Bash(php:*)"
+      "Bash(php:*)",
+      "WebSearch"
     ],
     "deny": [],
     "ask": []
