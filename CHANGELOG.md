@@ -2,7 +2,7 @@
 
 All notable changes to `laratext` will be documented in this file.
 
-## 2.0 — Unreleased
+## 2.0 - Unreleased
 
 ### BREAKING
 
@@ -18,7 +18,7 @@ All notable changes to `laratext` will be documented in this file.
 
 ### Changed
 
-- Default OpenAI model bumped from the legacy `gpt-3.5-turbo` to `gpt-5.4-nano` — currently OpenAI's cheapest and fastest small model, well-suited for low-temperature JSON translation work. Override via the `OPENAI_MODEL` env var if you prefer a different one.
+- Default OpenAI model bumped from the legacy `gpt-3.5-turbo` to `gpt-5.4-nano`, currently OpenAI's cheapest and fastest small model, well-suited for low-temperature JSON translation work. Override via the `OPENAI_MODEL` env var if you prefer a different one.
 
 ### Migration
 

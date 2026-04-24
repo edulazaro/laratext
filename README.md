@@ -216,8 +216,8 @@ These are the command Options:
 
 By default, `laratext:scan --write` translates:
 
-1. **New keys** — keys in code that don't exist yet in the lang files.
-2. **Drifted keys** — keys whose source text in code no longer matches the value stored in `lang/{defaultLocale}.json`. These are retranslated in every target language so translations stay aligned with the source.
+1. **New keys**: keys in code that don't exist yet in the lang files.
+2. **Drifted keys**: keys whose source text in code no longer matches the value stored in `lang/{defaultLocale}.json`. These are retranslated in every target language so translations stay aligned with the source.
 
 ```bash
 php artisan laratext:scan --write
@@ -230,7 +230,7 @@ php artisan laratext:scan --write
 
 #### Skipping drift: `--only-missing`
 
-If you want the conservative behaviour — translate only new keys, leave drifted keys untouched — pass `--only-missing`. Drift is still detected and printed as a warning, but no API calls are made for drifted keys:
+If you want the conservative behaviour (translate only new keys, leave drifted keys untouched), pass `--only-missing`. Drift is still detected and printed as a warning, but no API calls are made for drifted keys:
 
 ```bash
 php artisan laratext:scan --write --only-missing
