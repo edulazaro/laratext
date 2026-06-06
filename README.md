@@ -315,6 +315,10 @@ translateMany(array $texts, string $from, array $to): array
 
 If `translateMany` is not implemented, only single-string translations (translate) will be available for batch processing. For full support, both methods are recommended, so there are less requests and create a cost effective solution.
 
+## Laratext in the wild
+
+Read how Kenodo uses Laratext for AI-powered Laravel i18n: [English](https://kenodo.com/blog/laratext-laravel-i18n-ai) | [Español](https://kenodo.com/es/blog/laratext-laravel-i18n-ai).
+
 ## License
 
 Larakeep is open-sourced software licensed under the [MIT license](LICENSE.md).
