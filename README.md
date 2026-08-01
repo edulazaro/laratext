@@ -326,4 +326,4 @@ Read how Kenodo uses Laratext for AI-powered Laravel i18n: [English](https://ken
 
 ## License
 
-Larakeep is open-sourced software licensed under the [MIT license](LICENSE.md).
+Laratext is open-sourced software licensed under the [MIT license](LICENSE.md).
