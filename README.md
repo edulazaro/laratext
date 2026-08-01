@@ -274,12 +274,34 @@ These are the command Options:
 
 * `--write`: Write the missing keys to the language files.
 * `--lang`: Target a specific language for translation (e.g., es for Spanish).
-* `--dry` Perform a dry run (do not write).
+* `--dry` Report what a real run would do without writing anything and without calling the translator.
 * `--diff`: Show the diff of the changes made.
 * `--resync`: Retranslate **every** key from scratch, ignoring existing translations (use after changing translator or model).
 * `--only-missing`: Only translate brand-new keys; skip keys whose source text has drifted (they are listed as warnings instead).
 * `--prune`: Remove keys present in lang files but no longer referenced in code.
 * `--translator`: Specify the translator service to use (e.g., openai or google).
+
+#### Looking before spending: `--dry`
+
+`--dry` compares your code with the language files and reports what a real run would do. It writes nothing and, more importantly, never calls the translator, so it costs nothing:
+
+```bash
+php artisan laratext:scan --dry
+```
+
+```
+Found 5579 unique keys.
+
+Dry run, nothing was written and the translator was not called.
+   0 new key(s)
+   0 key(s) with a changed source text, 0 of them would be retranslated
+   313 orphan key(s) in the language files
+Nothing would be sent to the translator.
+```
+
+It combines with the other flags, so `--dry --only-missing` shows how many drifted keys would be left alone, and `--lang=es` narrows the comparison to one language.
+
+Note that dropping `--write` is not the same thing. Without `--dry` the command translates and simply does not save the result, so it spends tokens all the same. `--dry` is the one that costs nothing.
 
 ### Keeping Translations In Sync
 

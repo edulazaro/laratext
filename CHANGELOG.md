@@ -39,6 +39,10 @@ All notable changes to `laratext` will be documented in this file.
 
 - Continuous integration covering PHP `8.2` to `8.5` against Laravel `10`, `11`, `12` and `13`, plus PHP nightly. The matrix is resolved at run time from the active PHP branches and the published Laravel majors, so a new release joins it without touching the workflow.
 
+### Fixed
+
+- `--dry` now compares the code with the language files and reports what a real run would do: how many keys are new, how many have a changed source text and how many are orphans. It used to list every key found in the code under the heading "these keys would be added", which in a project with everything already translated meant thousands of lines saying nothing. It still writes nothing and still never calls the translator, and it now combines with `--only-missing`, `--lang` and the rest.
+
 ### Changed
 
 - The distributed package no longer ships `tests`, `phpunit.xml` or the CI workflow, so installing it puts fewer files in your `vendor` directory. They are still in the repository.

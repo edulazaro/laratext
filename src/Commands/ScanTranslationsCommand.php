@@ -43,11 +43,9 @@ class ScanTranslationsCommand extends Command
 
         $this->info('Found ' . count($texts) . ' unique keys.');
 
-        if ($this->option('dry')) {
-            return $this->handleDryRun($texts);
-        }
-
-        $translator = $this->resolveTranslator($this->option('translator'));
+        $translator = $this->option('dry')
+            ? null
+            : $this->resolveTranslator($this->option('translator'));
 
         $languages = $this->option('lang')
             ? [$this->option('lang')]
@@ -176,6 +174,12 @@ class ScanTranslationsCommand extends Command
         if (! empty($lockedEverywhere)) {
             $missingTexts = array_diff_key($missingTexts, array_flip($lockedEverywhere));
             $this->line('🔒 ' . count($lockedEverywhere) . ' key(s) not sent to the translator, they are locked in every language.');
+        }
+
+        // Everything above is comparison, and none of it calls the translator,
+        // so a dry run reports what would happen and stops here.
+        if ($this->option('dry')) {
+            return $this->handleDryRun($missingTexts, $staleTexts, $orphanKeys);
         }
 
         if (empty($missingTexts) && !$pruneWillWrite) {
@@ -368,11 +372,42 @@ class ScanTranslationsCommand extends Command
      * @param  array  $newKeys
      * @return void
      */
-    protected function handleDryRun(array $texts): void
+    /**
+     * Report what a real run would do, without calling the translator.
+     *
+     * @param array $missingTexts Keys that would be sent to the translator
+     * @param array $staleTexts Keys whose source text changed
+     * @param array $orphanKeys Keys in the language files but no longer in code
+     * @return void
+     */
+    protected function handleDryRun(array $missingTexts, array $staleTexts, array $orphanKeys): void
     {
-        $this->info('Dry run: these keys would be added:');
-        foreach ($texts as $key => $value) {
-            $this->line("- $key: $value");
+        // A drifted key is also a missing one unless --only-missing was passed,
+        // so it is reported on its own to keep the counts honest.
+        $newTexts = array_diff_key($missingTexts, $staleTexts);
+        $driftedToTranslate = array_intersect_key($missingTexts, $staleTexts);
+
+        $this->newLine();
+        $this->info('Dry run, nothing was written and the translator was not called.');
+
+        $this->line(sprintf('   %d new key(s)', count($newTexts)));
+        $this->line(sprintf('   %d key(s) with a changed source text, %d of them would be retranslated', count($staleTexts), count($driftedToTranslate)));
+        $this->line(sprintf('   %d orphan key(s) in the language files', count($orphanKeys)));
+
+        $total = count($missingTexts);
+
+        if ($total === 0) {
+            $this->info('Nothing would be sent to the translator.');
+        } else {
+            $this->info(sprintf('%d key(s) would be sent to the translator.', $total));
+        }
+
+        foreach ($newTexts as $key => $value) {
+            $this->line("+ {$key}: {$value}");
+        }
+
+        foreach ($driftedToTranslate as $key => $value) {
+            $this->line("~ {$key}: {$value}");
         }
     }
 }
