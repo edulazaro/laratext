@@ -17,6 +17,26 @@ abstract class Translator implements TranslatorInterface
     protected int $maxBatchItems = 100;
 
     /**
+     * The application context to append to the prompt, empty when none is set.
+     *
+     * Lets a project tell the translator what the application is about, which
+     * register to use, or which terms to leave alone. Configured in
+     * `texts.context` and ignored by translators that take no prompt.
+     *
+     * @return string
+     */
+    protected function contextInstruction(): string
+    {
+        $context = trim((string) config('texts.context', ''));
+
+        if ($context === '') {
+            return '';
+        }
+
+        return " Context about this application, provided by its developers: {$context}";
+    }
+
+    /**
      * Outputs a message to the terminal only when running in the console.
      *
      * @param string $message The message to display in the terminal.

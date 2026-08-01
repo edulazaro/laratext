@@ -2,6 +2,7 @@
 
 namespace EduLazaro\Laratext\Commands;
 
+use EduLazaro\Laratext\TranslationLocks;
 use Illuminate\Console\Command;
 use Symfony\Component\Finder\Finder;
 
@@ -140,9 +141,16 @@ class ScanTranslationsCommand extends Command
                     $this->info('Run with --write to actually remove them.');
                 } else {
                     foreach ($languages as $lang) {
+                        // Locked keys survive pruning too: the scanner never
+                        // writes them, and removing one is writing.
+                        $removable = array_filter(
+                            $orphanKeys,
+                            fn ($key) => ! TranslationLocks::isLocked($lang, $key)
+                        );
+
                         $existingTranslations[$lang] = array_diff_key(
                             $existingTranslations[$lang] ?? [],
-                            array_flip($orphanKeys)
+                            array_flip($removable)
                         );
                     }
                     $pruneWillWrite = true;
@@ -151,6 +159,23 @@ class ScanTranslationsCommand extends Command
             } else {
                 $this->info('Run with --prune --write to remove them.');
             }
+        }
+
+        // A key locked in every target language would be translated and then
+        // thrown away when writing, so it is dropped here and no tokens are
+        // spent on it.
+        $lockedEverywhere = array_keys(array_filter(
+            $missingTexts,
+            fn ($value, $key) => ! array_diff(
+                $languages,
+                array_filter($languages, fn ($lang) => TranslationLocks::isLocked($lang, $key))
+            ),
+            ARRAY_FILTER_USE_BOTH
+        ));
+
+        if (! empty($lockedEverywhere)) {
+            $missingTexts = array_diff_key($missingTexts, array_flip($lockedEverywhere));
+            $this->line('🔒 ' . count($lockedEverywhere) . ' key(s) not sent to the translator, they are locked in every language.');
         }
 
         if (empty($missingTexts) && !$pruneWillWrite) {
@@ -183,15 +208,26 @@ class ScanTranslationsCommand extends Command
         foreach ($languages as $lang) {
             $path = lang_path("{$lang}.json");
             $current = $existingTranslations[$lang] ?? [];
+            $skipped = 0;
 
             foreach ($translations as $key => $langs) {
+                // A locked key is never written, whoever asked for it.
+                if (TranslationLocks::isLocked($lang, $key)) {
+                    $skipped++;
+                    continue;
+                }
+
                 $current[$key] = $langs[$lang] ?? $key;
+            }
+
+            if ($skipped > 0) {
+                $this->line("🔒 {$lang}: {$skipped} key(s) kept as they are, they are locked.");
             }
 
             if ($this->option('diff')) {
                 $this->info("Diff for {$lang}:");
                 foreach ($translations as $key => $langs) {
-                    if (isset($langs[$lang])) {
+                    if (isset($langs[$lang]) && ! TranslationLocks::isLocked($lang, $key)) {
                         $this->line("+ \"$key\": \"{$langs[$lang]}\"");
                     }
                 }

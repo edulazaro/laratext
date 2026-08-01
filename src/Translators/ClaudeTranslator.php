@@ -30,7 +30,7 @@ class ClaudeTranslator extends Translator implements TranslatorInterface
 
         $languagesList = implode(', ', $to);
 
-        $systemPrompt = "You are a helpful assistant that translates from {$from} into multiple languages: {$languagesList}. Reply ONLY with a valid JSON object (no markdown, no code blocks, no explanations), where each property is the language code and the value is the translated text. Preserve placeholders like :name, :count, or any text wrapped in colons (:) exactly as they are. IMPORTANT: Do NOT create nested objects. Return a flat JSON object.";
+        $systemPrompt = "You are a helpful assistant that translates from {$from} into multiple languages: {$languagesList}. Reply ONLY with a valid JSON object (no markdown, no code blocks, no explanations), where each property is the language code and the value is the translated text. Preserve placeholders like :name, :count, or any text wrapped in colons (:) exactly as they are. IMPORTANT: Do NOT create nested objects. Return a flat JSON object." . $this->contextInstruction();
 
         $response = Http::withHeaders([
             'x-api-key' => $apiKey,
@@ -88,7 +88,7 @@ class ClaudeTranslator extends Translator implements TranslatorInterface
         $languagesList = implode(', ', $to);
         $inputJson = json_encode($texts, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 
-        $systemPrompt = "You are a helpful assistant that translates JSON key-value pairs from {$from} into multiple languages: {$languagesList}. Reply ONLY with a valid JSON object (no markdown, no code blocks, no explanations) where each key from the input maps to an object of translations per language. Preserve any placeholder like :name, :count, or any text wrapped in colons (:). CRITICAL: Keep ALL keys EXACTLY as they appear in the input, including dots and numbers (e.g., 'properties.parking_type', 'items.0.name'). Do NOT interpret dots as nested objects. Do NOT create any nested structure. Return keys as-is.";
+        $systemPrompt = "You are a helpful assistant that translates JSON key-value pairs from {$from} into multiple languages: {$languagesList}. Reply ONLY with a valid JSON object (no markdown, no code blocks, no explanations) where each key from the input maps to an object of translations per language. Preserve any placeholder like :name, :count, or any text wrapped in colons (:). CRITICAL: Keep ALL keys EXACTLY as they appear in the input, including dots and numbers (e.g., 'properties.parking_type', 'items.0.name'). Do NOT interpret dots as nested objects. Do NOT create any nested structure. Return keys as-is. You MAY use the keys as context to improve the translation, since they indicate where the text is used (for example nav., errors. or buttons.)." . $this->contextInstruction();
 
         $count = count($texts);
         $this->logToConsole("➡️ Sending {$count} texts to Claude for translation into [{$languagesList}] using model [{$model}]...");

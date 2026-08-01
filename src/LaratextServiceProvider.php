@@ -4,8 +4,10 @@ namespace EduLazaro\Laratext;
 
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\ServiceProvider;
+use EduLazaro\Laratext\Commands\LockTranslationsCommand;
 use EduLazaro\Laratext\Commands\MakeTranslatorCommand;
 use EduLazaro\Laratext\Commands\ScanTranslationsCommand;
+use EduLazaro\Laratext\Commands\UnlockTranslationsCommand;
 
 class LaratextServiceProvider extends ServiceProvider
 {
@@ -48,6 +50,8 @@ class LaratextServiceProvider extends ServiceProvider
         $this->commands([
             ScanTranslationsCommand::class,
             MakeTranslatorCommand::class,
+            LockTranslationsCommand::class,
+            UnlockTranslationsCommand::class,
         ]);
     }
 }

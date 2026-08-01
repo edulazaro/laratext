@@ -88,4 +88,25 @@ return [
         'es' => 'Spanish',
         'fr' => 'French',
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Application Context
+    |--------------------------------------------------------------------------
+    |
+    | Optional. Sent to the translator along with every batch, so it knows what
+    | it is translating instead of guessing from short strings on their own.
+    |
+    | Use it for what the application does, the register you want, and the
+    | terms that must be left alone:
+    |
+    |   'context' => 'A real estate CRM used by estate agents. Address the user
+    |                 formally. Never translate the product names Inmoqueen or
+    |                 Laratext.',
+    |
+    | Translators without a prompt, such as Google Translate, ignore it.
+    |
+    */
+
+    'context' => '',
 ];

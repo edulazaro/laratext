@@ -25,6 +25,13 @@ It includes these features:
 * Easy-to-use Blade directive (@text) and helper functions (text()).
 * Commands to scan and update translation files.
 
+## Requirements
+
+- PHP `8.2`, `8.3`, `8.4` and `8.5`
+- Laravel `10`, `11`, `12` and `13`
+
+Every combination of those is covered by the test suite on each push, and once a week so a new release that breaks the package shows up here first.
+
 ## Installation
 
 Execute the following command in your Laravel root project directory:
@@ -95,10 +102,27 @@ return [
         'es' => 'Spanish',
         'fr' => 'French',
     ],
+
+    // Optional. Tells the translator what it is translating.
+    'context' => '',
 ];
 ```
 
 This configuration allows you to define your translation services, API keys, and the supported languages in your Laravel application.
+
+### Giving the translator context
+
+A translator sees short strings on their own, so it has to guess. "Book" can be a noun or a verb, and it has no way of knowing whether your application addresses people formally or that your product name must be left alone.
+
+Fill in `context` and it is sent with every batch:
+
+```php
+'context' => 'A real estate CRM used by estate agents. Address the user formally. Never translate the product names Inmoqueen or Laratext.',
+```
+
+Use it for what the application does, the register you want, and the terms that must not be translated. It is optional: leave it empty and nothing is added to the prompt. Translators that take no prompt, such as Google Translate, ignore it.
+
+Translation keys are used as context too. Since they travel to the translator with their text, a key like `nav.home` says that "Home" is a navigation link and should be "Inicio" rather than "Hogar". The prompt states that keys **may** be used this way, not that they must: a key like `common.name` says nothing useful, and one inherited from an older part of the codebase can be misleading, so the text itself always comes first.
 
 This is an example of the `.env`:
 
@@ -191,6 +215,44 @@ echo text('items.count', 'You have :count items.', ['count' => 5]);
 
 When these texts are scanned and translated, the placeholders (`:name`, `:count`, etc.) will be preserved in all target languages.
 
+### Plurals
+
+Separate the forms with `|` and pass the quantity as `count`, which is the same syntax Laravel uses:
+
+```php
+text('items.count', 'One item|You have :count items', ['count' => $n]);
+```
+
+```blade
+@text('items.count', 'One item|You have :count items', ['count' => $cartItems])
+```
+
+```
+count = 1   ->  "One item"
+count = 5   ->  "You have 5 items"
+```
+
+The form is chosen by Laravel's own selector, so the rules of each language apply. A language with three forms uses three, and the translated file drives the choice:
+
+```json
+// lang/ru.json
+{ "items.count": "яблоко|яблока|яблок" }
+```
+
+Explicit ranges work as well, for when the wording changes at a threshold rather than at the singular:
+
+```php
+text('items.count', '{0} No items|[1,19] You have :count items|[20,*] You have plenty', ['count' => $n]);
+```
+
+Both signals are needed for this to kick in, a `|` in the text and a numeric `count` in the replacements. A text that merely contains a pipe is returned untouched, so `text('shortcut', 'Ctrl|Alt')` keeps being `Ctrl|Alt`.
+
+Note that the translator decides how many forms each language gets. Review the result for languages with more forms than your source language, and lock the key once it is right:
+
+```bash
+php artisan laratext:lock items.count --lang=ru
+```
+
 ## Scanning Translations
 
 You can use the `laratext:scan` command to scan your project files for missing translation keys and translate them into multiple languages:
@@ -198,6 +260,8 @@ You can use the `laratext:scan` command to scan your project files for missing t
 ```php
 php artisan laratext:scan --write
 ```
+
+The scanner reads your source files statically, so the key must be a literal string. `text($key)` or `text("prefix.$name")` will work at runtime if the key already exists, but the scanner will never see it, so it is never created or translated.
 
 You can also specify the target language or the translator to use:
 
@@ -245,6 +309,38 @@ php artisan laratext:scan --write --only-missing
 #        new: "Welcome to our site"
 # Drop --only-missing to retranslate them, or edit the JSON files manually.
 ```
+
+#### Protecting reviewed translations: locking keys
+
+`--only-missing` is all or nothing: it stops every drifted key from being retranslated. When a translator reviews a single string and you want that one string protected forever, lock it:
+
+```bash
+php artisan laratext:lock save                 # in every configured language
+php artisan laratext:lock save --lang=es       # only in Spanish
+php artisan laratext:lock "errors.*"           # wildcards are allowed
+php artisan laratext:lock --all --lang=es      # every key currently in es.json
+```
+
+A locked key is never written by the scanner. It is not retranslated when the source text drifts, it is not touched by `--resync`, and it is not removed by `--prune`. Locks are per language, so protecting a Spanish correction still lets French follow the English source.
+
+Unlocking is symmetric, and `--all` asks for confirmation because the damage only shows up on the next scan:
+
+```bash
+php artisan laratext:unlock save --lang=es
+php artisan laratext:unlock --all --lang=es
+php artisan laratext:unlock --all --force      # no question, for scripts
+```
+
+Locks live in `lang/.locked/{locale}.json` as a plain list of keys, so they are easy to review in a diff. Commit them: they are a decision about your translations, not local state. If nothing is locked the files do not exist and the scanner behaves exactly as it did before.
+
+When a scan skips something, it says so:
+
+```
+🔒 es: 1 key(s) kept as they are, they are locked.
+🔒 1 key(s) not sent to the translator, they are locked in every language.
+```
+
+That second line is also a saving: a key locked everywhere never reaches the API.
 
 #### Forcing a full retranslation: `--resync`
 
