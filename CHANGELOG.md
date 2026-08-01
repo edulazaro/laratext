@@ -34,6 +34,10 @@ All notable changes to `laratext` will be documented in this file.
 
   Two signals are required, a `|` in the text and a numeric `count` in the replacements, so a text that merely contains a pipe keeps being returned untouched. Previously `text('items.count', 'You have :count items', ['count' => 1])` produced "You have 1 items", and a text written with `|` was returned with the pipe inside.
 
+- `texts.source_locale`, the language the texts in your code are written in. It is what the scanner compares against and what the translator is told to translate from. Optional and empty by default, in which case `config('app.locale')` keeps being used, so nothing changes for a project that does not set it.
+
+  It matters when the two differ, for example an application running with `APP_LOCALE=es` whose source texts are written in English. There, `@text('portfolio.heading', 'Portfolio')` was compared against the Spanish "Portafolio", so every key looked like its source text had changed and a single `--write` would retranslate the entire project.
+
 - `texts.context`, an optional description of the application that is sent to the translator with every batch, so it knows what it is translating instead of guessing from short strings on their own. Use it for what the application does, the register you want, and the terms that must not be translated. Empty by default, and ignored by translators that take no prompt, such as Google Translate.
 - The prompt now states that translation keys may be used as context. They already travelled to the translator with their text, but nothing said they carried meaning, so `nav.home` had no more weight than any other identifier when choosing between "Inicio" and "Hogar".
 

@@ -24,6 +24,7 @@ class ScanTranslationsCommand extends Command
 
     protected $description = 'Scan project files and update translation files with missing keys.';
 
+
     /**
      * Execute the console command.
      *
@@ -35,6 +36,7 @@ class ScanTranslationsCommand extends Command
 
         $files = $this->getProjectFiles();
         $texts = $this->extractTextsFromFiles($files);
+
 
         if (empty($texts)) {
             $this->info('No translation keys found.');
@@ -51,7 +53,10 @@ class ScanTranslationsCommand extends Command
             ? [$this->option('lang')]
             : array_keys(config('texts.languages'));
 
-        $defaultLanguage = config('app.locale');
+        // The language the texts in the code are written in. It defaults to the
+        // application locale, which is the same thing in most projects, but not
+        // in one that runs in Spanish while writing its source texts in English.
+        $defaultLanguage = config('texts.source_locale') ?: config('app.locale');
 
         // Load existing translations per language
         $existingTranslations = [];
@@ -293,6 +298,23 @@ class ScanTranslationsCommand extends Command
      * @param  iterable  $files
      * @return array<string, string>  Key-value pairs of translatable strings.
      */
+
+    /**
+     * Whether a key is built at run time through string interpolation.
+     *
+     * Only double quotes interpolate, so text('hol$a') is a literal key and
+     * text("activity.{$type}") is not.
+     *
+     * @param string $delimiter The quote the key was written with
+     * @param string $key
+     * @return bool
+     */
+    protected function isInterpolatedKey(string $delimiter, string $key): bool
+    {
+        return $delimiter === '"' && str_contains($key, '$');
+    }
+
+
     protected function extractTextsFromFiles(iterable $files): array
     {
         $keyValuePairs = [];
@@ -301,15 +323,27 @@ class ScanTranslationsCommand extends Command
             $content = file_get_contents($file->getRealPath());
 
             // First, extract two-parameter calls: text('key', 'value')
+            //
+            // The key must be a literal string, so its group stops at the
+            // closing quote. Anything after it has to be the comma, which is
+            // what rules out a concatenated key such as text('rooms.' . $type).
+            // Without that limit the match runs past the call hunting for
+            // something that closes the pattern, swallowing the valid calls
+            // that were in between. The text after the comma is untouched and
+            // may still span lines and contain escaped quotes.
             $patterns = [
-                "/Text::get\(\s*(['\"])(.*?)\\1\s*,\s*(['\"])((?:\\\\.|(?!\\3).)*?)\\3/s",
-                "/@text\(\s*(['\"])(.*?)\\1\s*,\s*(['\"])((?:\\\\.|(?!\\3).)*?)\\3/s",
-                "/(?<!->)\btext\(\s*(['\"])(.*?)\\1\s*,\s*(['\"])((?:\\\\.|(?!\\3).)*?)\\3/s"
+                "/Text::get\(\s*(['\"])([^'\"\\r\\n]*?)\\1\s*,\s*(['\"])((?:\\\\.|(?!\\3).)*?)\\3/s",
+                "/@text\(\s*(['\"])([^'\"\\r\\n]*?)\\1\s*,\s*(['\"])((?:\\\\.|(?!\\3).)*?)\\3/s",
+                "/(?<!->)\btext\(\s*(['\"])([^'\"\\r\\n]*?)\\1\s*,\s*(['\"])((?:\\\\.|(?!\\3).)*?)\\3/s"
             ];
 
             foreach ($patterns as $pattern) {
                 preg_match_all($pattern, $content, $matches);
                 foreach ($matches[2] as $i => $key) {
+                    if ($this->isInterpolatedKey($matches[1][$i], $key)) {
+                        continue;
+                    }
+
                     $value = stripcslashes($matches[4][$i] ?? $key);
                     $keyValuePairs[$key] = $value;
                 }
@@ -324,7 +358,11 @@ class ScanTranslationsCommand extends Command
 
             foreach ($singlePatterns as $pattern) {
                 preg_match_all($pattern, $content, $matches);
-                foreach ($matches[2] as $key) {
+                foreach ($matches[2] as $i => $key) {
+                    if ($this->isInterpolatedKey($matches[1][$i], $key)) {
+                        continue;
+                    }
+
                     if (!isset($keyValuePairs[$key])) {
                         $keyValuePairs[$key] = $this->keyToText($key);
                     }

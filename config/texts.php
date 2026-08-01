@@ -91,6 +91,28 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Source Locale
+    |--------------------------------------------------------------------------
+    |
+    | The language the texts in your code are written in, which is what the
+    | scanner compares against and what the translator is told to translate
+    | from.
+    |
+    | Leave it null and the application locale is used, which is the same thing
+    | in most projects. Set it when they differ, for example an application that
+    | runs in Spanish while its source texts are written in English:
+    |
+    |   text('save', 'Save changes')   with APP_LOCALE=es
+    |
+    | Without this, every key looks like its source text had changed, since the
+    | Spanish translation is compared against the English text in the code.
+    |
+    */
+
+    'source_locale' => null,
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Context
     |--------------------------------------------------------------------------
     |

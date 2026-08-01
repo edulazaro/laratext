@@ -110,6 +110,25 @@ return [
 
 This configuration allows you to define your translation services, API keys, and the supported languages in your Laravel application.
 
+### The language your source texts are written in
+
+The scanner compares the text in your code with the one stored in the language file of your source language, and tells the translator to translate from it. By default that is `config('app.locale')`, which is right in most projects.
+
+It is not right when they differ, and the usual case is an application that runs in one language while its source texts are written in English:
+
+```php
+// APP_LOCALE=es
+@text('portfolio.heading', 'Portfolio')
+```
+
+Here the Spanish translation, "Portafolio", would be compared against "Portfolio" and every key would look like its source text had changed, so a single `--write` would retranslate the whole project. Point the package at the right file:
+
+```php
+'source_locale' => 'en',
+```
+
+Leave it out and nothing changes: the application locale keeps being used.
+
 ### Giving the translator context
 
 A translator sees short strings on their own, so it has to guess. "Book" can be a noun or a verb, and it has no way of knowing whether your application addresses people formally or that your product name must be left alone.
