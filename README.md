@@ -282,6 +282,21 @@ php artisan laratext:scan --write
 
 The scanner reads your source files statically, so the key must be a literal string. `text($key)` or `text("prefix.$name")` will work at runtime if the key already exists, but the scanner will never see it, so it is never created or translated.
 
+An interpolated key is skipped, and it is worth avoiding for a second reason: the scanner cannot report it as missing, so a language that lacks it shows the raw key to the user and nothing warns you. Write one literal call per case instead:
+
+```php
+// The scanner sees nothing here
+return text("activity.{$this->type->value}", $default);
+
+// It sees every key here
+return match ($this->type->value) {
+    'created' => text('activity.created', ':actor created :item'),
+    'deleted' => text('activity.deleted', ':actor deleted :item'),
+};
+```
+
+Only the key is affected, and only when it genuinely interpolates, meaning a double-quoted string containing `$`. Single quotes never interpolate in PHP, so `text('hol$a')` is a valid key, and the default text and the replacements can be anything.
+
 You can also specify the target language or the translator to use:
 
 

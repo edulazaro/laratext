@@ -2,7 +2,27 @@
 
 All notable changes to `laratext` will be documented in this file.
 
-## 2.1.0
+## 2.1.3
+
+### Added
+
+- `texts.source_locale`, the language the texts in your code are written in. It is what the scanner compares against and what the translator is told to translate from. Optional and empty by default, in which case `config('app.locale')` keeps being used, so nothing changes for a project that does not set it.
+
+  It matters when the two differ, for example an application running with `APP_LOCALE=es` whose source texts are written in English. There, `@text('portfolio.heading', 'Portfolio')` was compared against the Spanish "Portafolio", so every key looked like its source text had changed and a single `--write` would retranslate the entire project.
+
+### Fixed
+
+- Keys built with string interpolation are skipped instead of corrupting the scan. Only a literal key can be scanned, and a double-quoted key such as `text("activity.{$type->value}", $default)` is not one. The pattern used to match past the intended closing quote and swallow the rest of the file, so a single call like that produced one enormous key containing PHP source, and every legitimate `text()` call inside the swallowed span was lost: those keys silently stopped being created and translated.
+
+  A key is now discarded only when it is genuinely interpolated, meaning a double-quoted string containing `$`. Single quotes never interpolate in PHP, so `text('hol$a')` stays a valid key, and the rule applies to the key alone: the default text and the replacements are untouched.
+
+## 2.1.2
+
+### Fixed
+
+- `--dry` now compares the code with the language files and reports what a real run would do: how many keys are new, how many have a changed source text and how many are orphans. It used to list every key found in the code under the heading "these keys would be added", which in a project with everything already translated meant thousands of lines saying nothing. It still writes nothing and still never calls the translator, and it now combines with `--only-missing`, `--lang` and the rest.
+
+## 2.1.1
 
 ### Added
 
@@ -34,18 +54,14 @@ All notable changes to `laratext` will be documented in this file.
 
   Two signals are required, a `|` in the text and a numeric `count` in the replacements, so a text that merely contains a pipe keeps being returned untouched. Previously `text('items.count', 'You have :count items', ['count' => 1])` produced "You have 1 items", and a text written with `|` was returned with the pipe inside.
 
-- `texts.source_locale`, the language the texts in your code are written in. It is what the scanner compares against and what the translator is told to translate from. Optional and empty by default, in which case `config('app.locale')` keeps being used, so nothing changes for a project that does not set it.
-
-  It matters when the two differ, for example an application running with `APP_LOCALE=es` whose source texts are written in English. There, `@text('portfolio.heading', 'Portfolio')` was compared against the Spanish "Portafolio", so every key looked like its source text had changed and a single `--write` would retranslate the entire project.
-
 - `texts.context`, an optional description of the application that is sent to the translator with every batch, so it knows what it is translating instead of guessing from short strings on their own. Use it for what the application does, the register you want, and the terms that must not be translated. Empty by default, and ignored by translators that take no prompt, such as Google Translate.
 - The prompt now states that translation keys may be used as context. They already travelled to the translator with their text, but nothing said they carried meaning, so `nav.home` had no more weight than any other identifier when choosing between "Inicio" and "Hogar".
 
+## 2.1.0
+
+### Added
+
 - Continuous integration covering PHP `8.2` to `8.5` against Laravel `10`, `11`, `12` and `13`, plus PHP nightly. The matrix is resolved at run time from the active PHP branches and the published Laravel majors, so a new release joins it without touching the workflow.
-
-### Fixed
-
-- `--dry` now compares the code with the language files and reports what a real run would do: how many keys are new, how many have a changed source text and how many are orphans. It used to list every key found in the code under the heading "these keys would be added", which in a project with everything already translated meant thousands of lines saying nothing. It still writes nothing and still never calls the translator, and it now combines with `--only-missing`, `--lang` and the rest.
 
 ### Changed
 
