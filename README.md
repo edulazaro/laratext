@@ -1,3 +1,5 @@
+![Laratext](art/banner.png)
+
 # Laratext for Laravel
 
 <p align="center">
