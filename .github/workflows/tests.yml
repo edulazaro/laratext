@@ -1,0 +1,161 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly run, so a new Laravel or PHP release that breaks the package
+    # shows up here instead of in someone's application.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  matrix:
+    runs-on: ubuntu-latest
+    name: Resolve matrix
+    outputs:
+      matrix: ${{ steps.resolve.outputs.matrix }}
+
+    steps:
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      - name: Resolve supported PHP and Laravel versions
+        id: resolve
+        run: |
+          php -r '
+            $minLaravel = 10;
+
+            // Every PHP branch still receiving releases, straight from php.net.
+            // A new minor shows up here on its own, an EOL one drops off.
+            $active = json_decode(file_get_contents("https://www.php.net/releases/active.php?json=1"), true);
+            $phpVersions = array_keys($active[8] ?? []);
+            sort($phpVersions);
+
+            // Every Laravel major from $minLaravel up, with the PHP it requires.
+            $releases = json_decode(file_get_contents("https://repo.packagist.org/p2/laravel/framework.json"), true);
+            $majors = [];
+            foreach ($releases["packages"]["laravel/framework"] as $release) {
+                if (str_contains($release["version"], "-")) {
+                    continue;
+                }
+                if (! preg_match("/^v(\d+)\./", $release["version"], $m)) {
+                    continue;
+                }
+                $major = (int) $m[1];
+                if ($major < $minLaravel || isset($majors[$major])) {
+                    continue;
+                }
+                $majors[$major] = $release["require"]["php"] ?? "^8.0";
+            }
+            ksort($majors);
+
+            $include = [];
+            foreach ($majors as $major => $phpConstraint) {
+                preg_match("/(\d+\.\d+)/", $phpConstraint, $m);
+                $minPhp = $m[1] ?? "8.0";
+
+                foreach ($phpVersions as $php) {
+                    if (version_compare($php, $minPhp, "<")) {
+                        continue;
+                    }
+
+                    $include[] = [
+                        "php" => $php,
+                        "laravel" => "{$major}.*",
+                        // Testbench majors track Laravel majors two behind:
+                        // Laravel 11 to Testbench 9, 12 to 10, 13 to 11.
+                        "testbench" => ($major - 2) . ".*",
+                    ];
+                }
+            }
+
+            file_put_contents(getenv("GITHUB_OUTPUT"), "matrix=" . json_encode(["include" => $include]) . PHP_EOL, FILE_APPEND);
+
+            fwrite(STDERR, count($include) . " combinations: " . json_encode($include, JSON_PRETTY_PRINT) . PHP_EOL);
+          '
+
+  tests:
+    needs: matrix
+    runs-on: ubuntu-latest
+    name: PHP ${{ matrix.php }} / Laravel ${{ matrix.laravel }}
+
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.matrix.outputs.matrix) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: dom, curl, libxml, mbstring, zip
+          coverage: none
+
+      - name: Install dependencies
+        run: |
+          # Older Laravel majors carry open security advisories and newer
+          # Composer refuses to install them, but CI has to be able to resolve
+          # every major the package claims to support. Written straight into
+          # composer.json so it works whatever Composer version the runner ships.
+          php -r '$c = json_decode(file_get_contents("composer.json"), true);
+                  $c["config"]["policy"]["advisories"]["block"] = false;
+                  file_put_contents("composer.json", json_encode($c, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));'
+          composer require "laravel/framework:${{ matrix.laravel }}" --no-interaction --no-update
+          composer require --dev "orchestra/testbench:${{ matrix.testbench }}" --no-interaction --no-update
+          composer update --prefer-dist --no-interaction --no-progress --with-all-dependencies
+
+      - name: Run tests
+        run: vendor/bin/phpunit
+
+  next:
+    # Early warning for what is not released yet: the PHP master branch and
+    # the next Laravel. Reported, never blocking.
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    name: ${{ matrix.name }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: 'PHP nightly'
+            php: 'nightly'
+            laravel: ''
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: dom, curl, libxml, mbstring, zip
+          coverage: none
+
+      - name: Install dependencies
+        run: |
+          # Older Laravel majors carry open advisories and newer Composer
+          # refuses to install them. Written straight into composer.json so it
+          # works whatever Composer version the runner ships.
+          php -r '$c = json_decode(file_get_contents("composer.json"), true);
+                  $c["config"]["policy"]["advisories"]["block"] = false;
+                  file_put_contents("composer.json", json_encode($c, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));'
+          composer config minimum-stability dev
+          composer config prefer-stable true
+          if [ -n "${{ matrix.laravel }}" ]; then
+            composer require "laravel/framework:${{ matrix.laravel }}" --no-interaction --no-update
+          fi
+          composer update --prefer-dist --no-interaction --no-progress --with-all-dependencies --ignore-platform-req=php+
+
+      - name: Run tests
+        run: vendor/bin/phpunit

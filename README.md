@@ -3,8 +3,11 @@
 # Laratext for Laravel
 
 <p align="center">
-    <a href="https://packagist.org/packages/edulazaro/laratext"><img src="https://img.shields.io/packagist/dt/edulazaro/laratext" alt="Total Downloads"></a>
+    <a href="https://github.com/edulazaro/laratext/actions/workflows/tests.yml"><img src="https://github.com/edulazaro/laratext/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
     <a href="https://packagist.org/packages/edulazaro/laratext"><img src="https://img.shields.io/packagist/v/edulazaro/laratext" alt="Latest Stable Version"></a>
+    <a href="https://packagist.org/packages/edulazaro/laratext"><img src="https://img.shields.io/packagist/dt/edulazaro/laratext" alt="Total Downloads"></a>
+    <a href="https://packagist.org/packages/edulazaro/laratext"><img src="https://img.shields.io/packagist/php-v/edulazaro/laratext" alt="PHP Version"></a>
+    <a href="https://github.com/edulazaro/laratext/blob/main/LICENSE.md"><img src="https://img.shields.io/packagist/l/edulazaro/laratext" alt="License"></a>
 </p>
 
 

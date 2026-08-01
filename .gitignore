@@ -1,3 +1,7 @@
 /vendor/
 .phpunit.result.cache
-/.phpunit.cache
+/.phpunit.cache/
+/.claude/
+CLAUDE.md
+*.bak
+composer.lock
