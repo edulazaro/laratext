@@ -6,6 +6,7 @@ return [
         'openai' => EduLazaro\Laratext\Translators\OpenAITranslator::class,
         'claude' => EduLazaro\Laratext\Translators\ClaudeTranslator::class,
         'google' => EduLazaro\Laratext\Translators\GoogleTranslator::class,
+        'translatorio' => EduLazaro\Laratext\Translators\TranslatorioTranslator::class,
     ],
 
     /*
@@ -70,6 +71,28 @@ return [
     'google' => [
         'api_key' => env('GOOGLE_TRANSLATOR_API_KEY'),
         'timeout' => 20,
+        'retries' => 3,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Translatorio Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Translatorio (translatorio.com) is a translation API that keeps placeholders,
+    | HTML and personal data out of the model's reach and puts them back. `glossary`
+    | is the slug of a glossary on your account; `formality` is default, formal or
+    | informal. `url` only changes for a self-hosted or local instance.
+    |
+    */
+
+    'translatorio' => [
+        'api_key' => env('TRANSLATORIO_API_KEY'),
+        'url' => env('TRANSLATORIO_URL', 'https://translatorio.com'),
+        'glossary' => env('TRANSLATORIO_GLOSSARY'),
+        'formality' => env('TRANSLATORIO_FORMALITY'),
+        'format' => 'text',
+        'timeout' => 60,
         'retries' => 3,
     ],
 

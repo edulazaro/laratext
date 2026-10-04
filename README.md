@@ -70,6 +70,7 @@ return [
         'openai' => EduLazaro\Laratext\Translators\OpenAITranslator::class,
         'claude' => EduLazaro\Laratext\Translators\ClaudeTranslator::class,
         'google' => EduLazaro\Laratext\Translators\GoogleTranslator::class,
+        'translatorio' => EduLazaro\Laratext\Translators\TranslatorioTranslator::class,
     ],
 
     // OpenAI Configuration
@@ -93,6 +94,17 @@ return [
     'google' => [
         'api_key' => env('GOOGLE_TRANSLATOR_API_KEY'),
         'timeout' => 20,
+        'retries' => 3,
+    ],
+
+    // Translatorio Configuration
+    'translatorio' => [
+        'api_key' => env('TRANSLATORIO_API_KEY'),
+        'url' => env('TRANSLATORIO_URL', 'https://translatorio.com'),
+        'glossary' => env('TRANSLATORIO_GLOSSARY'),
+        'formality' => env('TRANSLATORIO_FORMALITY'),
+        'format' => 'text',
+        'timeout' => 60,
         'retries' => 3,
     ],
 
@@ -149,6 +161,7 @@ This is an example of the `.env`:
 OPENAI_API_KEY=your_openai_api_key
 ANTHROPIC_API_KEY=your_anthropic_api_key
 GOOGLE_TRANSLATOR_API_KEY=your_google_api_key
+TRANSLATORIO_API_KEY=your_translatorio_api_key
 ```
 
 To use Claude as the translator for a scan run, pass `--translator=claude`:
@@ -158,6 +171,16 @@ php artisan laratext:scan --write --translator=claude
 ```
 
 You can also set it as the project default by changing `default_translator` in `config/texts.php` or via the `default_translator` config entry. The Claude translator uses the [Messages API](https://docs.anthropic.com/en/api/messages) with prompt caching enabled on the system prompt, so repeated batches in a single scan reuse the cached instructions automatically.
+
+### Translatorio
+
+[Translatorio](https://translatorio.com) is a translation API built for this kind of job: it takes placeholders (`:name`, `{count}`, `%s`), HTML tags and links out of the text before the model sees it and puts them back afterwards, so a translated string can never lose its `:count`. It also reports when a placeholder did not survive, and the scan prints a warning for that key instead of writing a broken string silently.
+
+```bash
+php artisan laratext:scan --write --translator=translatorio
+```
+
+Two options are specific to it: `glossary`, the slug of a glossary on your Translatorio account (the terms your product always translates the same way), and `formality` (`default`, `formal` or `informal`). The `context` above is sent with every batch. Retries on `429` and `5xx` reuse the same `Idempotency-Key`, so a retried batch is never charged twice, and a `402` (out of credits) stops the scan with the API's own message rather than being retried.
 
 ## Usage
 
