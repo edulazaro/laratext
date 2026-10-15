@@ -103,8 +103,9 @@ return [
         'url' => env('TRANSLATORIO_URL', 'https://translatorio.com'),
         'glossary' => env('TRANSLATORIO_GLOSSARY'),
         'formality' => env('TRANSLATORIO_FORMALITY'),
-        'format' => 'text',
-        'timeout' => 60,
+        'effort' => env('TRANSLATORIO_EFFORT'),
+        'format' => 'auto',
+        'timeout' => 180,
         'retries' => 3,
     ],
 
@@ -180,7 +181,16 @@ You can also set it as the project default by changing `default_translator` in `
 php artisan laratext:scan --write --translator=translatorio
 ```
 
-Two options are specific to it: `glossary`, the slug of a glossary on your Translatorio account (the terms your product always translates the same way), and `formality` (`default`, `formal` or `informal`). The `context` above is sent with every batch. Retries on `429` and `5xx` reuse the same `Idempotency-Key`, so a retried batch is never charged twice, and a `402` (out of credits) stops the scan with the API's own message rather than being retried.
+The options specific to it:
+
+- `glossary`: the slug of a glossary on your Translatorio account, the terms your product always translates the same way.
+- `formality`: `default`, `formal` or `informal`.
+- `effort`: which model translates, `default`, `low`, `medium` or `high`.
+- `format`: `auto` sends the strings with HTML tags as `html`, so their tags are protected too, and the rest as `text`. Set `text`, `html` or `markdown` to send every string that way.
+
+The `context` above is sent with every batch, up to 30,000 characters. Laravel locale codes such as `pt_BR` or `zh_CN` are written back under the same code, the source language is never sent (its file gets the source text), and more than twenty languages go in several calls.
+
+Retries on `429`, `5xx` and a call still running after a timeout reuse the same `Idempotency-Key`, so a retried batch is never charged twice, and they wait as long as the API asks. A `402` (out of credits) is never retried: on the first batch it stops the scan with the API's own message; later on, the scan keeps and writes what was already translated and sends nothing more, and the next scan finishes the rest. Any other batch that fails after a good one is skipped and reported, like the other translators do.
 
 ## Usage
 

@@ -82,7 +82,9 @@ return [
     | Translatorio (translatorio.com) is a translation API that keeps placeholders,
     | HTML and personal data out of the model's reach and puts them back. `glossary`
     | is the slug of a glossary on your account; `formality` is default, formal or
-    | informal. `url` only changes for a self-hosted or local instance.
+    | informal; `effort` (default, low, medium, high) picks the model. `format` auto
+    | sends strings with HTML tags as html and the rest as text. `url` only changes
+    | for a self-hosted or local instance.
     |
     */
 
@@ -91,8 +93,9 @@ return [
         'url' => env('TRANSLATORIO_URL', 'https://translatorio.com'),
         'glossary' => env('TRANSLATORIO_GLOSSARY'),
         'formality' => env('TRANSLATORIO_FORMALITY'),
-        'format' => 'text',
-        'timeout' => 60,
+        'effort' => env('TRANSLATORIO_EFFORT'),
+        'format' => 'auto',
+        'timeout' => 180,
         'retries' => 3,
     ],
 
