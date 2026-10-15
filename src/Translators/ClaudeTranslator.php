@@ -2,15 +2,31 @@
 
 namespace EduLazaro\Laratext\Translators;
 
-use Illuminate\Support\Facades\Http;
 use EduLazaro\Laratext\Contracts\TranslatorInterface;
+use EduLazaro\Laratext\ModelLimits;
+use EduLazaro\Laratext\ResponseTruncated;
 use EduLazaro\Laratext\Translator;
+use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
 class ClaudeTranslator extends Translator implements TranslatorInterface
 {
     protected const ENDPOINT = 'https://api.anthropic.com/v1/messages';
     protected const API_VERSION = '2023-06-01';
+
+    /**
+     * The longest answer asked of the model by default, in tokens; `texts.claude.max_tokens`
+     * changes it, and the model's own limit caps it.
+     */
+    protected const DEFAULT_MAX_TOKENS = 4096;
+
+    /**
+     * Tokens left for a model that thinks by default, on top of the answer: thinking counts
+     * against `max_tokens`. Well under the 32,000 past which Anthropic sends thinking to
+     * batch processing.
+     */
+    protected const THINKING_RESERVE = 16000;
 
     /**
      * Translates a single string into multiple target languages.
@@ -22,51 +38,18 @@ class ClaudeTranslator extends Translator implements TranslatorInterface
      */
     public function translate(string $text, string $from, array $to): array
     {
-        $apiKey = config('texts.claude.api_key');
-        $model = config('texts.claude.model', 'claude-haiku-4-5');
-        $timeout = config('texts.claude.timeout', 60);
-        $maxRetries = config('texts.claude.retries', 3);
-        $maxTokens = config('texts.claude.max_tokens', 4096);
-
         $languagesList = implode(', ', $to);
 
-        $systemPrompt = "You are a helpful assistant that translates from {$from} into multiple languages: {$languagesList}. Reply ONLY with a valid JSON object (no markdown, no code blocks, no explanations), where each property is the language code and the value is the translated text. Preserve placeholders like :name, :count, or any text wrapped in colons (:) exactly as they are. IMPORTANT: Do NOT create nested objects. Return a flat JSON object." . $this->contextInstruction();
+        $answer = $this->ask(
+            "You are a helpful assistant that translates from {$from} into multiple languages: {$languagesList}. Reply ONLY with a valid JSON object (no markdown, no code blocks, no explanations), where each property is the language code and the value is the translated text. Preserve placeholders like :name, :count, or any text wrapped in colons (:) exactly as they are. IMPORTANT: Do NOT create nested objects. Return a flat JSON object." . $this->contextInstruction(),
+            $text,
+        );
 
-        $response = Http::withHeaders([
-            'x-api-key' => $apiKey,
-            'anthropic-version' => self::API_VERSION,
-        ])
-            ->timeout($timeout)
-            ->retry($maxRetries, 10)
-            ->post(self::ENDPOINT, [
-                'model' => $model,
-                'max_tokens' => $maxTokens,
-                'temperature' => 0,
-                'system' => [
-                    [
-                        'type' => 'text',
-                        'text' => $systemPrompt,
-                        'cache_control' => ['type' => 'ephemeral'],
-                    ],
-                ],
-                'messages' => [
-                    [
-                        'role' => 'user',
-                        'content' => $text,
-                    ],
-                ],
-            ]);
-
-        $rawContent = trim($response->json('content.0.text', '{}'));
-        $rawContent = $this->stripCodeFences($rawContent);
-
-        $translations = json_decode($rawContent, true);
-
-        if (json_last_error() !== JSON_ERROR_NONE || !is_array($translations)) {
-            throw new RuntimeException("Failed to decode translation response: " . $rawContent);
+        if ($answer === null) {
+            throw new RuntimeException('Failed to decode translation response.');
         }
 
-        return $this->flattenArray($translations);
+        return $this->translationsIn(['text' => $answer], ['text'], $to)['text'] ?? [];
     }
 
     /**
@@ -79,78 +62,164 @@ class ClaudeTranslator extends Translator implements TranslatorInterface
      */
     public function translateMany(array $texts, string $from, array $to): array
     {
-        $apiKey = config('texts.claude.api_key');
-        $model = config('texts.claude.model', 'claude-haiku-4-5');
-        $timeout = config('texts.claude.timeout', 60);
-        $maxRetries = config('texts.claude.retries', 3);
-        $maxTokens = config('texts.claude.max_tokens', 4096);
+        try {
+            return $this->translateBatch($texts, $from, $to);
+        } catch (ResponseTruncated) {
+            $this->logToConsole('❌ The answer did not fit the model\'s output limit. Skipping this batch and continuing...');
 
-        $languagesList = implode(', ', $to);
-        $inputJson = json_encode($texts, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-
-        $systemPrompt = "You are a helpful assistant that translates JSON key-value pairs from {$from} into multiple languages: {$languagesList}. Reply ONLY with a valid JSON object (no markdown, no code blocks, no explanations) where each key from the input maps to an object of translations per language. Preserve any placeholder like :name, :count, or any text wrapped in colons (:). CRITICAL: Keep ALL keys EXACTLY as they appear in the input, including dots and numbers (e.g., 'properties.parking_type', 'items.0.name'). Do NOT interpret dots as nested objects. Do NOT create any nested structure. Return keys as-is. You MAY use the keys as context to improve the translation, since they indicate where the text is used (for example nav., errors. or buttons.)." . $this->contextInstruction();
-
-        $count = count($texts);
-        $this->logToConsole("➡️ Sending {$count} texts to Claude for translation into [{$languagesList}] using model [{$model}]...");
-
-        $attempt = 0;
-        $translations = null;
-
-        while ($attempt < $maxRetries) {
-            $attempt++;
-
-            $response = Http::withHeaders([
-                'x-api-key' => $apiKey,
-                'anthropic-version' => self::API_VERSION,
-            ])
-                ->timeout($timeout)
-                ->post(self::ENDPOINT, [
-                    'model' => $model,
-                    'max_tokens' => $maxTokens,
-                    'temperature' => 0,
-                    'system' => [
-                        [
-                            'type' => 'text',
-                            'text' => $systemPrompt,
-                            'cache_control' => ['type' => 'ephemeral'],
-                        ],
-                    ],
-                    'messages' => [
-                        [
-                            'role' => 'user',
-                            'content' => $inputJson,
-                        ],
-                    ],
-                ]);
-
-            $rawContent = trim($response->json('content.0.text', '{}'));
-            $rawContent = $this->stripCodeFences($rawContent);
-            $translations = json_decode($rawContent, true);
-
-            if (json_last_error() === JSON_ERROR_NONE && is_array($translations)) {
-                $translations = $this->flattenArray($translations);
-                break;
-            }
-
-            if ($attempt < $maxRetries) {
-                $error = json_last_error_msg();
-                $this->logToConsole("⚠️  Attempt {$attempt}: Failed to decode JSON (error: {$error}), retrying...");
-                usleep(10000);
-            }
+            return [];
         }
+    }
 
-        if (json_last_error() !== JSON_ERROR_NONE || !is_array($translations)) {
-            $error = json_last_error_msg();
-            $keys = implode(', ', array_keys($texts));
-            $this->logToConsole("❌ Failed to decode translation response after {$maxRetries} attempts for keys: {$keys} (JSON error: {$error})");
-            $this->logToConsole("⚠️  Skipping this batch and continuing...");
+    /**
+     * @param array<string, string> $texts
+     * @param string $from
+     * @param array<int, string> $to
+     * @return array<string, array<string, string>>
+     *
+     * @throws ResponseTruncated
+     */
+    protected function translateBatch(array $texts, string $from, array $to): array
+    {
+        $languagesList = implode(', ', $to);
+        $keys = array_map('strval', array_keys($texts));
+
+        $this->logToConsole('➡️ Sending ' . count($texts) . " texts to Claude for translation into [{$languagesList}] using model [{$this->model()}]...");
+
+        $answer = $this->ask(
+            "You are a helpful assistant that translates JSON key-value pairs from {$from} into multiple languages: {$languagesList}. Reply ONLY with a valid JSON object (no markdown, no code blocks, no explanations) where each key from the input maps to an object of translations per language. Preserve any placeholder like :name, :count, or any text wrapped in colons (:). CRITICAL: Keep ALL keys EXACTLY as they appear in the input, including dots and numbers (e.g., 'properties.parking_type', 'items.0.name'). Do NOT interpret dots as nested objects. Do NOT create any nested structure. Return keys as-is. You MAY use the keys as context to improve the translation, since they indicate where the text is used (for example nav., errors. or buttons.)." . $this->contextInstruction(),
+            json_encode($texts, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
+        );
+
+        if ($answer === null) {
+            $this->logToConsole('❌ No usable answer for keys: ' . implode(', ', $keys) . '. Skipping this batch and continuing...');
+
             return [];
         }
 
-        $translatedKeys = implode(', ', array_keys($translations));
-        $this->logToConsole("✅ Received translations for: {$translatedKeys}");
+        $translations = $this->translationsIn($answer, $keys, $to);
+
+        $this->logToConsole('✅ Received translations for: ' . implode(', ', array_keys($translations)));
 
         return $translations;
+    }
+
+    /**
+     * Sizes the batches: the answer asked for, capped by the model's own limit.
+     *
+     * @return int
+     */
+    protected function outputTokenLimit(): int
+    {
+        return $this->maxTokens();
+    }
+
+    /**
+     * One request with the parameters the model accepts, asked again when the JSON does not
+     * decode or the API is busy, never when the answer was cut short.
+     *
+     * @param string $system
+     * @param string $user
+     * @return array<string, mixed>|null The decoded answer, or null when none came.
+     *
+     * @throws ResponseTruncated
+     */
+    protected function ask(string $system, string $user): ?array
+    {
+        $attempts = max(1, (int) config('texts.claude.retries', 3));
+
+        $body = [
+            'model' => $this->model(),
+            'max_tokens' => min($this->limits()->maxOutputTokens, $this->maxTokens() + ($this->limits()->reasoning ? static::THINKING_RESERVE : 0)),
+            'system' => [
+                [
+                    'type' => 'text',
+                    'text' => $system,
+                    'cache_control' => ['type' => 'ephemeral'],
+                ],
+            ],
+            'messages' => [
+                ['role' => 'user', 'content' => $user],
+            ],
+        ];
+
+        if ($this->limits()->temperature) {
+            $body['temperature'] = 0;
+        }
+
+        for ($attempt = 1; $attempt <= $attempts; $attempt++) {
+            $response = Http::withHeaders([
+                'x-api-key' => (string) config('texts.claude.api_key'),
+                'anthropic-version' => self::API_VERSION,
+            ])
+                ->timeout((int) config('texts.claude.timeout', 60))
+                ->post(self::ENDPOINT, $body);
+
+            if (! $response->successful()) {
+                $this->logToConsole('⚠️  Claude answered ' . $response->status() . ': ' . ($response->json('error.message') ?? 'no message'));
+
+                if (! $this->retryable($response) || $attempt === $attempts) {
+                    return null;
+                }
+
+                usleep(min(8, 2 ** $attempt) * 250_000);
+
+                continue;
+            }
+
+            if ($response->json('stop_reason') === 'max_tokens') {
+                throw new ResponseTruncated('Claude stopped at the output limit.');
+            }
+
+            // A model that thinks first answers a `thinking` block before the text one.
+            $text = collect((array) $response->json('content', []))->where('type', 'text')->pluck('text')->implode('');
+            $answer = json_decode($this->stripCodeFences(trim((string) $text)), true);
+
+            if (is_array($answer)) {
+                return $answer;
+            }
+
+            if ($attempt < $attempts) {
+                $this->logToConsole("⚠️  Attempt {$attempt}: Failed to decode JSON (error: " . json_last_error_msg() . '), retrying...');
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * A rate limit, an overload (529) or a server error is worth asking again.
+     *
+     * @param Response $response
+     * @return bool
+     */
+    protected function retryable(Response $response): bool
+    {
+        return $response->status() === 429 || $response->status() >= 500;
+    }
+
+    /**
+     * @return int
+     */
+    protected function maxTokens(): int
+    {
+        return min(max(256, (int) config('texts.claude.max_tokens', static::DEFAULT_MAX_TOKENS)), $this->limits()->maxOutputTokens);
+    }
+
+    /**
+     * @return string
+     */
+    protected function model(): string
+    {
+        return (string) config('texts.claude.model', 'claude-haiku-4-5');
+    }
+
+    /**
+     * @return ModelLimits
+     */
+    protected function limits(): ModelLimits
+    {
+        return ModelLimits::for('claude', $this->model());
     }
 
     /**
@@ -167,6 +236,8 @@ class ClaudeTranslator extends Translator implements TranslatorInterface
     /**
      * Flatten a nested array structure back into dot notation.
      * Handles cases where the model interprets dots as nested objects.
+     *
+     * Kept for translators that extend this one; answers are now read by `translationsIn()`.
      */
     protected function flattenArray(array $array, string $prepend = '', bool $isTopLevel = true): array
     {

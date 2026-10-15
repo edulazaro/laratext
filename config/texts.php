@@ -29,6 +29,9 @@ return [
     |
     | Here you can configure the OpenAI translator service, including your
     | API key, preferred model, request timeout, and retry attempts.
+    | `max_output_tokens` is the longest answer asked for (the model's own
+    | limit caps it, see Model Limits below); batches are sized to fit it.
+    | `reasoning_effort` overrides the effort sent to a reasoning model.
     |
     */
 
@@ -37,6 +40,8 @@ return [
         'model' => env('OPENAI_MODEL', 'gpt-5.4-nano'),
         'timeout' => 60,
         'retries' => 3,
+        'max_output_tokens' => 4096,
+        'reasoning_effort' => null,
     ],
 
     /*
@@ -46,7 +51,9 @@ return [
     |
     | Configure the Claude translator. The system prompt is automatically
     | marked with cache_control: ephemeral, so repeated batches in a single
-    | scan run benefit from prompt caching at no extra cost.
+    | scan run benefit from prompt caching at no extra cost. `max_tokens` is
+    | the longest answer asked for (the model's own limit caps it); batches
+    | are sized to fit it.
     |
     */
 
@@ -98,6 +105,28 @@ return [
         'timeout' => 180,
         'retries' => 3,
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Model Limits
+    |--------------------------------------------------------------------------
+    |
+    | Laratext knows the OpenAI and Claude models: how long an answer each may
+    | give, whether it accepts `temperature`, whether its answer can be held to
+    | a JSON schema and whether it reasons first. Batches and requests follow
+    | that, and a model it does not know gets the most cautious limits.
+    |
+    | Correct a model or add a new one here, by its name or a prefix of it:
+    |
+    |   'gpt-6' => ['max_output_tokens' => 128000, 'temperature' => false,
+    |               'json' => 'schema', 'reasoning' => true,
+    |               'reasoning_effort' => 'none'],
+    |
+    | `json` is `schema`, `object` or `none`.
+    |
+    */
+
+    'models' => [],
 
     /*
     |--------------------------------------------------------------------------

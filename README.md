@@ -79,6 +79,8 @@ return [
         'model' => env('OPENAI_MODEL', 'gpt-5.4-nano'),
         'timeout' => 60,
         'retries' => 3,
+        'max_output_tokens' => 4096,
+        'reasoning_effort' => null,
     ],
 
     // Claude (Anthropic) Configuration
@@ -181,6 +183,26 @@ php artisan laratext:scan --write --translator=claude
 ```
 
 The Claude translator runs with prompt caching enabled on the system prompt, so repeated batches in a single scan reuse the cached instructions automatically. For a service that is not on the list, [write your own translator](#creating-translators).
+
+### What each model can do
+
+Translating with `gpt-3.5-turbo` is not translating with `gpt-5.4-nano`: one answers 4,096 tokens at most and the other 128,000, one takes `temperature` and another refuses any request that sends it, one can be held to a JSON schema and another only asked for JSON. The OpenAI and Claude translators know the models of both providers and act on it:
+
+- **Batches are sized by the answer they produce, not by the text they send.** A batch into twenty languages answers twenty times its size, so it is cut to fit one answer: `max_output_tokens` for OpenAI and `max_tokens` for Claude (4,096 by default), capped by the model's own limit. When one string into every language would not fit, the languages go in groups. No batch is ever larger than the 2,000 characters and 100 keys of before.
+- **An answer cut short at the limit is split, never sent again whole.** The batch is halved until it fits, so a long scan into many languages never pays three times for the same truncated answer.
+- **Each model gets only the parameters it accepts.** `temperature: 0` goes to the models that take it. Reasoning models get `reasoning_effort`: `none` where the model can skip reasoning, otherwise the least it takes, and room on top of the answer for the reasoning they do. Models that support Structured Outputs answer against a JSON schema with exactly the keys and languages asked for; older ones in JSON mode.
+- **The source language is never sent**: its file gets the source text.
+- **Regional codes are kept**: `pt_BR` and `zh_CN` are written under the code you use, whether the model answers `pt-BR` or `zh`.
+
+A model the package does not know is asked the way every model was before: a 4,096-token answer and no parameter it might refuse. Correct a model or add a new one in `config/texts.php`, by its name or a prefix of it:
+
+```php
+'models' => [
+    'gpt-6' => ['max_output_tokens' => 128000, 'temperature' => false, 'json' => 'schema', 'reasoning' => true, 'reasoning_effort' => 'low'],
+],
+```
+
+`json` is `schema`, `object` or `none`. A reasoning model takes longer per request: give it a `timeout` of 180 seconds or more.
 
 ### Translatorio
 
