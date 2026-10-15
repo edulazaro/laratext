@@ -15,13 +15,13 @@
 
 Laratext is a Laravel package designed to manage and auto-translate your application's text strings. In laravel, when using the `__` gettext helper method you specify the translation or the key. Both options have issues. If you specify the key, the file becomes difficult to read, as you don't know what's there. If you specify the text, your translations will break if you change a single character. With Laratext you specify both the key and the text, making it useful and readable.
 
-It also allows you to seamlessly integrate translation services (like OpenAI or Google Translate) into your Laravel application to automatically translate missing translation keys across multiple languages.
+It also allows you to seamlessly integrate translation services (OpenAI, Claude, Google Translate or Translatorio) into your Laravel application to automatically translate missing translation keys across multiple languages.
 
 It includes these features:
 
 * Simplifies working with language files in Laravel.
 * Auto-translate missing translation keys to multiple languages.
-* Supports multiple translation services (e.g., OpenAI, Google Translate).
+* Supports multiple translation services: OpenAI, Claude, Google Translate and [Translatorio](https://translatorio.com), plus any of your own.
 * Easy-to-use Blade directive (@text) and helper functions (text()).
 * Commands to scan and update translation files.
 
@@ -165,13 +165,22 @@ GOOGLE_TRANSLATOR_API_KEY=your_google_api_key
 TRANSLATORIO_API_KEY=your_translatorio_api_key
 ```
 
-To use Claude as the translator for a scan run, pass `--translator=claude`:
+### The translators included
+
+Four translators ship with the package. Pick one for a scan with `--translator=`, or make it the project default with `default_translator` in `config/texts.php`.
+
+| Translator | `--translator=` | Key in `.env` | What it is |
+|---|---|---|---|
+| OpenAI | `openai` | `OPENAI_API_KEY` | OpenAI's chat models, `gpt-5.4-nano` unless `OPENAI_MODEL` says otherwise. Reads `context`. |
+| Claude | `claude` | `ANTHROPIC_API_KEY` | Anthropic's [Messages API](https://docs.anthropic.com/en/api/messages), `claude-haiku-4-5` unless `ANTHROPIC_MODEL` says otherwise. Reads `context`. |
+| Google Translate | `google` | `GOOGLE_TRANSLATOR_API_KEY` | The Google Cloud Translation API. It takes no prompt, so it ignores `context`. |
+| [Translatorio](https://translatorio.com) | `translatorio` | `TRANSLATORIO_API_KEY` | A translation API that protects placeholders and tags itself and reports any that did not survive. Reads `context`. See below. |
 
 ```bash
 php artisan laratext:scan --write --translator=claude
 ```
 
-You can also set it as the project default by changing `default_translator` in `config/texts.php` or via the `default_translator` config entry. The Claude translator uses the [Messages API](https://docs.anthropic.com/en/api/messages) with prompt caching enabled on the system prompt, so repeated batches in a single scan reuse the cached instructions automatically.
+The Claude translator runs with prompt caching enabled on the system prompt, so repeated batches in a single scan reuse the cached instructions automatically. For a service that is not on the list, [write your own translator](#creating-translators).
 
 ### Translatorio
 
