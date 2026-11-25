@@ -22,6 +22,10 @@ class LaratextServiceProvider extends ServiceProvider
             return "<?php echo \EduLazaro\Laratext\Text::get($expression); ?>";
         });
 
+        Blade::directive('texts', function ($expression) {
+            return "<?php echo \EduLazaro\Laratext\Text::script($expression); ?>";
+        });
+
         $this->publishes([
             __DIR__.'/../config/texts.php' => config_path('texts.php'),
         ], 'texts');

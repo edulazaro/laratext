@@ -186,4 +186,34 @@ return [
     */
 
     'context' => '',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Scanning Scripts
+    |--------------------------------------------------------------------------
+    |
+    | PHP and Blade files are always scanned. List folders here to scan
+    | JavaScript, TypeScript, Vue and Svelte files too, for the same calls:
+    |
+    |   text('cart.empty', 'Your cart is empty')       React, Svelte, plain JS
+    |   $text('cart.empty', 'Your cart is empty')      Vue templates, Alpine
+    |
+    | Only these folders are read, so the bundles Vite writes to public/build
+    | and bootstrap/ssr are never mistaken for source. `functions` are the
+    | names the calls use: add `t` if your components call it that.
+    |
+    | The key and the text must be literal strings. A call with a variable, a
+    | concatenation or a template literal with ${} is reported, not guessed.
+    |
+    */
+
+    'scan' => [
+        'scripts' => [
+            'paths' => [
+                // 'resources/js',
+            ],
+            'extensions' => ['js', 'jsx', 'ts', 'tsx', 'vue', 'svelte'],
+            'functions' => ['text', '$text'],
+        ],
+    ],
 ];

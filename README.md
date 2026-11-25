@@ -336,6 +336,138 @@ Note that the translator decides how many forms each language gets. Review the r
 php artisan laratext:lock items.count --lang=ru
 ```
 
+## JavaScript: React, Vue, Svelte and Alpine
+
+The same call works in the browser, with the same key, source text, placeholders and plurals:
+
+```js
+text('cart.total', 'Total: :amount', { amount: '12 €' })
+text('cart.items', 'One item|:count items', { count: 3 })
+```
+
+It takes three pieces, all in this package: the scanner finds the calls in your scripts, Laravel hands each page only the translations it needs, and a small JavaScript module (no npm install) looks them up the way `text()` does in PHP.
+
+### Setup
+
+List the folders with your scripts in `config/texts.php`, so `laratext:scan` reads them too:
+
+```php
+'scan' => [
+    'scripts' => [
+        'paths' => ['resources/js'],
+    ],
+],
+```
+
+Point an alias at the module in `vite.config.js`:
+
+```js
+import path from 'node:path';
+
+export default defineConfig({
+    resolve: {
+        alias: {
+            '@laratext': path.resolve(__dirname, 'vendor/edulazaro/laratext/resources/js'),
+        },
+    },
+});
+```
+
+TypeScript declarations are included.
+
+### Pages rendered by Blade
+
+For Alpine, or React, Vue and Svelte components mounted on a Blade page, print the translations the page needs with `@texts`, by key prefix:
+
+```blade
+<head>
+    @texts(['header', 'cart'])
+</head>
+```
+
+It prints a `<script type="application/json">` with the keys `header`, `header.*`, `cart` and `cart.*` in the current language. The language file itself never reaches the browser. A layout and a view can each print their own, and they are merged.
+
+```js
+// React, Svelte or plain JavaScript
+import { text } from '@laratext';
+
+text('header.search', 'Search');
+```
+
+```js
+// Vue: $text in templates
+import { laratext } from '@laratext/vue';
+
+createApp(App).use(laratext).mount('#app');
+```
+
+```js
+// Alpine: $text in any component, x-text="$text('cart.empty', 'Your cart is empty')"
+import laratext from '@laratext/alpine';
+
+Alpine.plugin(laratext);
+```
+
+After a Livewire (`wire:navigate`) or Turbo navigation, the new page's `@texts` is read again.
+
+### Inertia
+
+Share the translations as props with `Text::frontend()`, the common ones from the middleware and each page's own from its controller:
+
+```php
+use EduLazaro\Laratext\Text;
+
+// HandleInertiaRequests::share()
+'texts' => fn () => Text::frontend(['header', 'footer']),
+
+// A controller
+return Inertia::render('Cart', [
+    'pageTexts' => Text::frontend('cart'),
+]);
+```
+
+Tell the module which props hold them, once, in `app.js` (and `ssr.js`). The default is `['texts']`:
+
+```js
+import { configure } from '@laratext';
+
+configure({ props: ['texts', 'pageTexts'] });
+```
+
+```jsx
+// React
+import { useText } from '@laratext/inertia/react';
+
+const text = useText();
+return <h1>{text('cart.title', 'Your cart')}</h1>;
+```
+
+```js
+// Vue: $text in templates, useText() in <script setup>
+import { laratext } from '@laratext/inertia/vue';
+
+createSSRApp({ render: () => h(App, props) }).use(plugin).use(laratext);
+```
+
+```svelte
+<!-- Svelte, with Inertia 2 or 3 -->
+<script>
+  import { useText } from '@laratext/inertia/svelte';
+  const text = useText();
+</script>
+
+<h1>{text('cart.title', 'Your cart')}</h1>
+```
+
+With Inertia the function comes from `useText()` rather than an import: server-side rendering renders several requests in the same Node process, and `useText()` reads the translations of the page being rendered, never a dictionary shared between requests.
+
+### How the calls must be written
+
+- The key and the text are literal strings, in single, double or back quotes. A call with a variable, a concatenation or a template literal with `${}` cannot be scanned: `laratext:scan` lists each one with its file and line instead of guessing.
+- A call can span several lines, and the third argument can be anything.
+- The scanner looks for `text` and `$text`. If your components call the function something else, add the name: `'functions' => ['text', '$text', 't']`.
+- A key not translated yet shows its source text, as in PHP. The plural and placeholder rules are Laravel's, and the tests compare the JavaScript against PHP in every language Laravel knows.
+
 ## Scanning Translations
 
 You can use the `laratext:scan` command to scan your project files for missing translation keys and translate them into multiple languages:

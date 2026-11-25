@@ -2,6 +2,29 @@
 
 All notable changes to `laratext` will be documented in this file.
 
+## 2.3.0
+
+Nothing to change in an existing project: scripts are only scanned once their folders are listed in `config/texts.php`, and a published config without the new `scan` block keeps working as it is.
+
+### Added
+
+- `text('key', 'Source')` in JavaScript, TypeScript, Vue and Svelte. `laratext:scan` reads the folders listed under `scan.scripts.paths` (for example `resources/js`) and collects those calls like the PHP ones.
+  - Each call is matched on its own, so the apostrophes of JSX text and Vue or Svelte markup (`l'Andorra`) never throw the scanner off. Single, double and back quotes, escapes and calls split over several lines are read; JavaScript escapes such as `à` are turned into the characters they stand for.
+  - The names looked for are `text` and `$text` by default (`scan.scripts.functions`). `post.text()`, `setText()` and `response.text()` are not calls to them; `this.$text()` from an Alpine component is.
+  - A call whose key or text is not a literal string (a variable, a concatenation, a template literal with `${}`) is listed with its file and line instead of being guessed or dropped in silence.
+  - Only the listed folders are read, so the bundles in `public/build` and `bootstrap/ssr` are never taken for source. `.d.ts` and `.min.js` files are skipped.
+- `@texts(['header', 'cart'])` prints the current language's translations under those prefixes in a `<script type="application/json">` tag, for scripts on a Blade page. `Text::frontend()` returns the same as an array, to share as Inertia props, and `Text::script()` the tag.
+- A JavaScript module in `resources/js`, imported from `vendor/` through a Vite alias:
+  - `text()`, which reads the `@texts` tags of the page, and again after a Livewire or Turbo navigation.
+  - `useText()` for Inertia with React, Vue and Svelte (Inertia 2 and 3), which reads the page being rendered, so server-side rendering never mixes two requests.
+  - A Vue plugin and an Alpine magic for `$text` in templates.
+  - Placeholders and plural forms are chosen exactly as `text()` chooses them in PHP. The plural rules are generated from Laravel's `MessageSelector`, and the tests compare both in each of the 280 languages it knows.
+  - TypeScript declarations.
+
+### Fixed
+
+- A text not in the language file yet had its placeholders replaced one by one: `:Name` and `:NAME` were left as they were, `:name` could replace the start of `:name_full`, and a closure for `<tag>...</tag>` was ignored. It is now replaced like a translated text, so it reads the same before and after the next scan.
+
 ## 2.2.0
 
 Nothing to change in an existing project: a published `config/texts.php` keeps working as it is, and a translator of your own that extends `Translator` behaves exactly as before.

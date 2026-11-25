@@ -2,6 +2,7 @@
 
 namespace EduLazaro\Laratext\Commands;
 
+use EduLazaro\Laratext\ScriptTexts;
 use EduLazaro\Laratext\TranslationLocks;
 use Illuminate\Console\Command;
 use Symfony\Component\Finder\Finder;
@@ -36,6 +37,7 @@ class ScanTranslationsCommand extends Command
 
         $files = $this->getProjectFiles();
         $texts = $this->extractTextsFromFiles($files);
+        $texts = array_replace($texts, $this->extractTextsFromScripts());
 
 
         if (empty($texts)) {
@@ -388,6 +390,75 @@ class ScanTranslationsCommand extends Command
         // Replace underscores with spaces and capitalize first letter of each word
         $text = str_replace('_', ' ', $lastPart);
         return ucwords($text);
+    }
+
+    /**
+     * Extract text() calls from the JavaScript, TypeScript, Vue and Svelte files
+     * under texts.scan.scripts.paths, and report the calls that could not be read.
+     *
+     * @return array<string, string>
+     */
+    protected function extractTextsFromScripts(): array
+    {
+        $files = $this->getScriptFiles();
+
+        if ($files === null) {
+            return [];
+        }
+
+        $extractor = new ScriptTexts(config('texts.scan.scripts.functions', ['text', '$text']));
+        $texts = [];
+        $unreadable = [];
+
+        foreach ($files as $file) {
+            $found = $extractor->extract(file_get_contents($file->getRealPath()));
+            $texts = array_replace($texts, $found['texts']);
+
+            foreach ($found['unreadable'] as $call) {
+                $unreadable[] = [$file->getRelativePathname(), $call['line'], $call['call']];
+            }
+        }
+
+        if (! empty($unreadable)) {
+            $this->warn('⚠️  ' . count($unreadable) . ' call(s) in scripts could not be read: the key and the text must be literal strings.');
+            foreach ($unreadable as [$path, $line, $call]) {
+                $this->line("   • {$path}:{$line}  {$call}");
+            }
+        }
+
+        return $texts;
+    }
+
+    /**
+     * The script files to scan, or null when none are configured.
+     *
+     * @return Finder|null
+     */
+    protected function getScriptFiles(): ?Finder
+    {
+        $paths = array_filter(
+            array_map(
+                fn (string $path) => str_starts_with($path, DIRECTORY_SEPARATOR) ? $path : base_path($path),
+                (array) config('texts.scan.scripts.paths', [])
+            ),
+            'is_dir'
+        );
+
+        if (empty($paths)) {
+            return null;
+        }
+
+        $finder = (new Finder())
+            ->files()
+            ->in($paths)
+            ->exclude(['node_modules'])
+            ->notName(['*.d.ts', '*.min.js']);
+
+        foreach ((array) config('texts.scan.scripts.extensions', ['js', 'jsx', 'ts', 'tsx', 'vue', 'svelte']) as $extension) {
+            $finder->name('*.' . ltrim($extension, '.'));
+        }
+
+        return $finder;
     }
 
     /**
