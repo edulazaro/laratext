@@ -2,6 +2,14 @@
 
 All notable changes to `laratext` will be documented in this file.
 
+## 2.3.2
+
+### Fixed
+
+- `laratext:scan` reads every PHP file, comments included, so the code examples in the comments of `config/texts.php` were collected as keys: `save` ("Save changes") since 2.1.3 and `cart.empty` since 2.3.0, sent to the translator and written to every language file of the projects that published the config. The config no longer carries code examples; they are in the README.
+
+  A config published before keeps its copy. If yours has the line `text('save', 'Save changes')   with APP_LOCALE=es`, or the two `cart.empty` lines under Scanning Scripts, delete them; `laratext:scan --prune --write` then removes the keys.
+
 ## 2.3.1
 
 ### Fixed

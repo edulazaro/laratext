@@ -116,13 +116,8 @@ return [
     | a JSON schema and whether it reasons first. Batches and requests follow
     | that, and a model it does not know gets the most cautious limits.
     |
-    | Correct a model or add a new one here, by its name or a prefix of it:
-    |
-    |   'gpt-6' => ['max_output_tokens' => 128000, 'temperature' => false,
-    |               'json' => 'schema', 'reasoning' => true,
-    |               'reasoning_effort' => 'none'],
-    |
-    | `json` is `schema`, `object` or `none`.
+    | Correct a model or add a new one here, by its name or a prefix of it.
+    | The README lists the options.
     |
     */
 
@@ -155,12 +150,8 @@ return [
     |
     | Leave it null and the application locale is used, which is the same thing
     | in most projects. Set it when they differ, for example an application that
-    | runs in Spanish while its source texts are written in English:
-    |
-    |   text('save', 'Save changes')   with APP_LOCALE=es
-    |
-    | Without this, every key looks like its source text had changed, since the
-    | Spanish translation is compared against the English text in the code.
+    | runs in Spanish while its source texts are written in English. Without it,
+    | every key there looks like its source text had changed.
     |
     */
 
@@ -175,13 +166,8 @@ return [
     | it is translating instead of guessing from short strings on their own.
     |
     | Use it for what the application does, the register you want, and the
-    | terms that must be left alone:
-    |
-    |   'context' => 'A real estate CRM used by estate agents. Address the user
-    |                 formally. Never translate the product names Inmoqueen or
-    |                 Laratext.',
-    |
-    | Translators without a prompt, such as Google Translate, ignore it.
+    | terms that must be left alone. Translators without a prompt, such as
+    | Google Translate, ignore it.
     |
     */
 
@@ -193,11 +179,7 @@ return [
     |--------------------------------------------------------------------------
     |
     | PHP and Blade files are always scanned. List folders here to scan
-    | JavaScript, TypeScript, Vue and Svelte files too, for the same calls:
-    |
-    |   text('cart.empty', 'Your cart is empty')       React, Svelte, plain JS
-    |   $text('cart.empty', 'Your cart is empty')      Vue templates, Alpine
-    |
+    | JavaScript, TypeScript, Vue and Svelte files too, for the same calls.
     | Only these folders are read, so the bundles Vite writes to public/build
     | and bootstrap/ssr are never mistaken for source. `functions` are the
     | names the calls use: add `t` if your components call it that.
