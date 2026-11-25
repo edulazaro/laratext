@@ -28,6 +28,10 @@ class SourceTextReplacementsTest extends TestCase
     /** @test */
     public function a_closure_wraps_a_tag()
     {
+        if (version_compare($this->app->version(), '11.0.0', '<')) {
+            $this->markTestSkipped('Laravel 10 does not take closures as replacements: __() fails before Laratext is reached.');
+        }
+
         $this->assertSame(
             'Read the <a href="/terms">terms</a>',
             Text::get('missing.terms', 'Read the <link>terms</link>', [

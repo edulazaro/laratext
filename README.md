@@ -467,6 +467,7 @@ With Inertia the function comes from `useText()` rather than an import: server-s
 - A call can span several lines, and the third argument can be anything.
 - The scanner looks for `text` and `$text`. If your components call the function something else, add the name: `'functions' => ['text', '$text', 't']`.
 - A key not translated yet shows its source text, as in PHP. The plural and placeholder rules are Laravel's, and the tests compare the JavaScript against PHP in every language Laravel knows.
+- Plurals follow the current Laravel 13, which reads a negative count by its absolute value and allows spaces inside `{ 0 }` and `[ 1,* ]`. On older Laravel releases PHP does neither, so only those two cases can read differently in PHP and in the browser.
 
 ## Scanning Translations
 

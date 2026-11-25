@@ -85,6 +85,16 @@ test('plural forms come from the stored line or from the source text', () => {
   assert.equal(t('new', 'Ctrl|Alt'), 'Ctrl|Alt');
 });
 
+test('plurals follow the current Laravel 13: negative counts and spaces inside conditions', () => {
+  const t = createText({ locale: 'en', lines: {} });
+
+  assert.equal(t('x', 'one degree|:count degrees', { count: -1 }), 'one degree');
+  assert.equal(t('x', 'one degree|:count degrees', { count: -3 }), '-3 degrees');
+  assert.equal(t('x', '{-1} minus one|other', { count: -1 }), 'minus one');
+  assert.equal(t('x', ' { 0 } none | [ 1,* ] :count items', { count: 0 }), 'none');
+  assert.equal(t('x', ' { 0 } none | [ 1,* ] :count items', { count: 4 }), '4 items');
+});
+
 test('replacements follow Laravel', () => {
   const t = createText({ locale: 'es', lines: {} });
 

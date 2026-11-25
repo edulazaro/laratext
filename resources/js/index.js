@@ -157,7 +157,8 @@ export function makeReplacements(line, replace = {}) {
 }
 
 /**
- * Laravel's MessageSelector::choose().
+ * Laravel's MessageSelector::choose(), as in the current Laravel 13: spaces
+ * allowed inside { } and [ ], and a negative count read by its absolute value.
  */
 export function choose(line, number, locale) {
   let segments = line.split('|');
@@ -170,7 +171,7 @@ export function choose(line, number, locale) {
     }
   }
 
-  segments = segments.map((part) => part.replace(/^[{[][-?\d|*,.*]*[}\]]/, ''));
+  segments = segments.map((part) => part.replace(/^[ \t\n\v\f\r]*[{[][ \t\n\v\f\r]*[-?\d|*,.*]*[ \t\n\v\f\r]*[}\]]/, ''));
 
   const index = pluralIndex(locale, number);
 
@@ -182,7 +183,7 @@ export function choose(line, number, locale) {
 }
 
 function extractFromString(part, number) {
-  const matches = part.match(/^[{[]([-?\d|*,.*]*)[}\]]([\s\S]*)$/);
+  const matches = part.match(/^[ \t\n\v\f\r]*[{[][ \t\n\v\f\r]*([-?\d|*,.*]*)[ \t\n\v\f\r]*[}\]]([\s\S]*)$/);
 
   if (!matches) {
     return null;

@@ -49,7 +49,7 @@ class JavascriptTest extends TestCase
         preg_match_all('/^  (\w+): \d+,$/m', File::get(dirname(__DIR__, 2) . '/resources/js/plural.js'), $locales);
         $locales = [...$locales[1], 'xx', null];
 
-        $numbers = [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 19, 20, 21, 22, 25, 100, 101, 102, 103, 111, 112, 0.5, 1.5, 2.5, -1, -2];
+        $numbers = [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 19, 20, 21, 22, 25, 100, 101, 102, 103, 111, 112, 0.5, 1.5, 2.5];
 
         $lines = [
             'a|b|c|d|e|f',
@@ -60,9 +60,22 @@ class JavascriptTest extends TestCase
             'only one',
         ];
 
+        $selector = new MessageSelector;
+
+        // The JavaScript follows the current Laravel 13, which reads a negative
+        // count by its absolute value and allows spaces inside { } and [ ].
+        // Older releases do neither, so those cases are compared only where
+        // the installed Laravel already does the same.
+        if ($selector->choose('a|b', -1, 'en') === 'a') {
+            array_push($numbers, -1, -2, -5, -21);
+        }
+
+        if ($selector->choose(' { 0 } none|some', 0, 'en') === 'none') {
+            $lines[] = ' { 0 } none| [ 1,19 ] some |[20,*] many|[ 1 , 2 ] spaced comma';
+        }
+
         $cases = [];
         $expected = [];
-        $selector = new MessageSelector;
 
         foreach ($locales as $i => $locale) {
             foreach ($numbers as $number) {

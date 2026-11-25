@@ -2,6 +2,17 @@
 
 All notable changes to `laratext` will be documented in this file.
 
+## 2.3.1
+
+### Fixed
+
+- The JavaScript `text()` chose plural forms as Laravel 13.23 and earlier do. The current Laravel 13 reads a negative count by its absolute value (`-1` takes the singular) and allows spaces inside a condition (`{ 0 }`, `[ 1,* ]`), and so does the JavaScript now. Older Laravel releases do neither in PHP, so there a negative count or a spaced condition can read differently in PHP and in the browser.
+
+### Tests
+
+- The closure replacement test is skipped on Laravel 10, which never took closures as replacements: `__()` fails on them before Laratext is reached.
+- The plural comparison between JavaScript and PHP checks negative counts and spaced conditions only where the installed Laravel already handles them like the current release. Checked on Laravel 10.50, 11.57, 12.74, 13.23 and 13.44.
+
 ## 2.3.0
 
 Nothing to change in an existing project: scripts are only scanned once their folders are listed in `config/texts.php`, and a published config without the new `scan` block keeps working as it is.

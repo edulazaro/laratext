@@ -1,4 +1,4 @@
-// Generated from Illuminate\Translation\MessageSelector::getPluralIndex() (Laravel 13.23.0). Do not edit by hand.
+// Generated from Illuminate\Translation\MessageSelector::getPluralIndex() (Laravel 13.44.1). Do not edit by hand.
 
 const rules = [
   (n) => 0,
@@ -302,6 +302,8 @@ const locales = {
 };
 
 export function pluralIndex(locale, number) {
+  number = Math.abs(number);
+
   const rule = locales[locale];
 
   return rule === undefined ? 0 : rules[rule](number);
